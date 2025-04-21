@@ -5,50 +5,54 @@
 #include <ctime>
 #include <fstream>
 #include <curl/curl.h>
-#include <jsoncpp/json/json.h>
+// #include <jsoncpp/json/json.h>
 #include <filesystem>
+#include <vector>
 
-struct SnapshotConfig
-{
-    std::string area_coordinates;
-    std::string save_path;
-    std::string file_name_format;
-    int capture_interval;
-    std::string start_time;
-    std::string end_time;
-};
+std::vector<std::pair<double, double>> urls = {{38.989986, 45.044545}, {39.007159, 45.122231}};
 
-void createSnapshot(const SnapshotConfig &config)
+// struct SnapshotConfig
+// {
+//     std::string area_coordinates;
+//     std::string save_path;
+//     std::string file_name_format;
+int capture_interval = 3600;
+std::string start_time = "07:00";
+std::string end_time = "23:00";
+// };
+
+void createSnapshot(std::pair<double, double> url, std::string addres, std::string format, int i, tm *current_time)
+// void createSnapshot(const SnapshotConfig &config)
 {
-    std::time_t now = std::time(nullptr);
-    std::tm *current_time = std::localtime(&now);
 
     // Проверка времени
-    if (current_time->tm_hour < std::stoi(config.start_time.substr(0, 2)) ||
-        current_time->tm_hour >= std::stoi(config.end_time.substr(0, 2)))
-    {
-        return; // Не в пределах времени
-    }
+    // if (current_time->tm_hour < std::stoi(config.start_time.substr(0, 2)) ||
+    //     current_time->tm_hour >= std::stoi(config.end_time.substr(0, 2)))
+    // {
+    //     return; // Не в пределах времени
+    // }
 
     // Форматирование имени файла
     char buffer[80];
-    std::strftime(buffer, sizeof(buffer), config.file_name_format.c_str(), current_time);
-    std::string file_name = config.save_path + "/" + buffer + ".png";
+    std::strftime(buffer, sizeof(buffer), format.c_str(), current_time);
+    std::string file_name = addres + "/" + buffer + '_' + std::to_string(i) + ".png"; // Добавляем индекс к имени файла
 
     // Проверка, существует ли папка
-    if (!std::filesystem::exists(config.save_path))
+    if (!std::filesystem::exists(addres))
     {
-        std::cerr << "Каталог для сохранения не существует: " << config.save_path << std::endl;
+        std::cerr << "Каталог для сохранения не существует: " << addres << std::endl;
         return;
     }
 
     // Запрос к API
-    //std::string api_url = "https://api.yandex.com/maps/v1/?ll=" + config.area_coordinates + "&size=650,450&l=map";
-    //curl "https://api.yandex.com/maps/v1/?ll=-39.48425,36.87645&size=650,450&l=map"
+    // std::string api_url = "https://api.yandex.com/maps/v1/?ll=" + config.area_coordinates + "&size=650,450&l=map";
+    // curl "https://api.yandex.com/maps/v1/?ll=-39.48425,36.87645&size=650,450&l=map"
 
-    //std::string api_url = "https://yandex.ru/maps/35/krasnodar/probki/?ll=38.981268%2C45.042113&z=15.31";
-    std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=38.969717,45.032623&size=650,450&z=15&l=map,trf";
-    
+    // std::string api_url = "https://yandex.ru/maps/35/krasnodar/probki/?ll=38.981268%2C45.042113&z=15.31";
+    // std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=38.969717,45.032623&size=650,450&z=15&l=map,trf";
+    std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=" +
+                          std::to_string(url.first) + "," + std::to_string(url.second) +
+                          "&size=650,450&z=13&l=map,trf";
 
     CURL *curl = curl_easy_init();
     if (curl)
@@ -96,33 +100,47 @@ void createSnapshot(const SnapshotConfig &config)
     }
 }
 
-void startSnapshotting(const SnapshotConfig &config)
-{
-    while (true)
-    {
-        createSnapshot(config);
-        std::this_thread::sleep_for(std::chrono::seconds(config.capture_interval));
-    }
-}
+// void startSnapshotting(const SnapshotConfig &config)
+// {
+//     while (true)
+//     {
+//         createSnapshot(config);
+//         std::this_thread::sleep_for(std::chrono::seconds(config.capture_interval));
+//     }
+// }
 
 int main()
 {
-    SnapshotConfig config = {
-        //"-39.48425,36.87645",
-        "-45.044659,38.964670", // Убедитесь, что координаты правильные
-        "./screenshots",
-        "Скрин %Y-%m-%d в %H-%M",
-        3600,
-        "07:00",
-        "23:00"};
+    // SnapshotConfig config = {
+    //     //"-39.48425,36.87645",
+    //     "-45.044659,38.964670", // Убедитесь, что координаты правильные
+    //     "./screenshots",
+    //     "Скрин %Y-%m-%d в %H-%M",
+    //     3600,
+    //     "07:00",
+    //     "23:00"};
 
     // Создание папки для сохранения, если она не существует
-    if (!std::filesystem::exists(config.save_path))
+    // if (!std::filesystem::exists(config.save_path))
+    // {
+    //     std::filesystem::create_directory(config.save_path);
+    // }
+    while (true)
     {
-        std::filesystem::create_directory(config.save_path);
+        std::time_t now = std::time(nullptr);
+        std::tm *current_time = std::localtime(&now);
+        if (current_time->tm_hour < std::stoi(start_time.substr(0, 2)) ||
+            current_time->tm_hour >= std::stoi(end_time.substr(0, 2)))
+        {
+            continue; // Не в пределах времени
+        }
+        for (int u = urls.size() - 1; u >= 0; u--)
+        {
+            std::string name = "Скрин %Y-%m-%d в %H-%M" + ' ' + u;
+            createSnapshot(urls[u], "./screenshots", "Скрин %Y-%m-%d в %H-%M", u, current_time);
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(capture_interval));
     }
-
-    startSnapshotting(config);
 
     return 0;
 }
