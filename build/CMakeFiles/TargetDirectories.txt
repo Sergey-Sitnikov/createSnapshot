@@ -1,0 +1,4 @@
+/home/ssv/code/ScreenCard/build/CMakeFiles/ScreenshotCapture.dir
+/home/ssv/code/ScreenCard/build/CMakeFiles/edit_cache.dir
+/home/ssv/code/ScreenCard/build/CMakeFiles/rebuild_cache.dir
+/home/ssv/code/ScreenCard/build/CMakeFiles/ScreenshotCapture_autogen.dir
