@@ -299,7 +299,6 @@ int main(int argc, char *argv[]) {
             startStopButton->setText("Запустить");
             timer->stop();
             std::cout << "Захват скриншотов остановлен." << std::endl;
-
         }
     });
 
