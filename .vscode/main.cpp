@@ -303,6 +303,7 @@ int main(int argc, char *argv[]) {
     });
 
     // Запуск GUI
+    
     window->show();
     return app.exec();
 }
