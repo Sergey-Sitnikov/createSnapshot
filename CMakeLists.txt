@@ -1,48 +1,41 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
+project(ScreenshotCapture)
 
-project(SnapshotApp)
-
-# Установите необходимые флаги для CMake
 set(CMAKE_CXX_STANDARD 17)
 
-# Укажите пути до заголовков и статической библиотеки cURL
-set(CURL_INCLUDE_DIRS "/home/ssv/curl-7.84.0/include")
-set(CURL_LIBRARIES "/home/ssv/curl-7.84.0/lib/.libs/libcurl.a")  # Используйте статическую библиотеку
-
-# Установите флаг для использования статических библиотек OpenSSL
-set(OPENSSL_USE_STATIC_LIBS TRUE)
-
-# Установите путь к установленным библиотекам, если необходимо
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} /usr/local)
-
-# Найдите необходимые библиотеки
+find_package(Qt5 REQUIRED COMPONENTS Widgets)
 find_package(CURL REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(nghttp2 REQUIRED)
-#find_package(Brotli REQUIRED)
-#find_package(Zstd REQUIRED)
+find_package(Zstd REQUIRED)
+find_package(Brotli REQUIRED)
+# find_package(nghttp2 REQUIRED) # Закомментируйте это
 
+set(CMAKE_AUTOMOC ON)
 
-# Вывод информации для проверки
-message(STATUS "CURL_LIBRARIES: ${CURL_LIBRARIES}")
-message(STATUS "CURL_INCLUDE_DIRS: ${CURL_INCLUDE_DIRS}")
+add_executable(ScreenshotCapture main.cpp)
 
-# Ваша логика сборки
-add_executable(SnapshotApp main.cpp)  # Укажите ваши исходные файлы
+# Альтернативный подход к связыванию для Zstd и Brotli
+find_library(ZSTD_LIBRARY zstd
+    HINTS /usr/lib/x86_64-linux-gnu) # Измените путь, если необходимо
 
-# Проверка наличия переменной CURL_INCLUDE_DIRS и добавление ее в путь
-if(CURL_INCLUDE_DIRS)
-    include_directories(${CURL_INCLUDE_DIRS})
+find_library(BROTLI_LIBRARY brotlidec
+    HINTS /usr/lib/x86_64-linux-gnu) # Измените путь, если необходимо
+
+find_library(NGHTTP2_LIBRARY nghttp2
+    HINTS /usr/lib/x86_64-linux-gnu) # Добавьте это
+
+if (ZSTD_LIBRARY AND BROTLI_LIBRARY AND NGHTTP2_LIBRARY)
+    message(STATUS "Found Zstd library: ${ZSTD_LIBRARY}")
+    message(STATUS "Found Brotli library: ${BROTLI_LIBRARY}")
+    message(STATUS "Found nghttp2 library: ${NGHTTP2_LIBRARY}")
+    target_link_libraries(ScreenshotCapture Qt5::Widgets CURL::libcurl ${ZSTD_LIBRARY} ${BROTLI_LIBRARY} ${NGHTTP2_LIBRARY}) # Обновите это
 else()
-    message(FATAL_ERROR "CURL_INCLUDE_DIRS not set. Please check your cURL installation.")
+    if (NOT ZSTD_LIBRARY)
+        message(FATAL_ERROR "Zstd library not found")
+    endif()
+    if (NOT BROTLI_LIBRARY)
+        message(FATAL_ERROR "Brotli library not found")
+    endif()
+    if (NOT NGHTTP2_LIBRARY)
+        message(FATAL_ERROR "nghttp2 library not found")
+    endif()
 endif()
-
-# Линковка с библиотеками
-target_link_libraries(SnapshotApp PRIVATE 
-    ${CURL_LIBRARIES} 
-    OpenSSL::SSL 
-    OpenSSL::Crypto 
-    nghttp2::nghttp2 
-#    Brotli::Brotli 
-#    Zstd::Zstd
-)
