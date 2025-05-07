@@ -1,2 +1,0 @@
-# Hashes of file build rules.
-302b97719f67b5b363cdd020191f5c4d CMakeFiles/ScreenshotCapture_autogen

@@ -24,7 +24,7 @@
 #include <vector>
 #include <QThread>
 #include <QObject>
-#include <functional> 
+#include <functional> // Добавьте этот заголовочный файл
 
 // Параметры по умолчанию
 std::vector<std::pair<double, double>> urls = {{38.989986, 45.044545}, {39.007159, 45.122231}};
