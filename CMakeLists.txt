@@ -22,6 +22,7 @@ find_package(nghttp2 REQUIRED)
 #find_package(Brotli REQUIRED)
 #find_package(Zstd REQUIRED)
 
+
 # Вывод информации для проверки
 message(STATUS "CURL_LIBRARIES: ${CURL_LIBRARIES}")
 message(STATUS "CURL_INCLUDE_DIRS: ${CURL_INCLUDE_DIRS}")
