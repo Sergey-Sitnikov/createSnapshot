@@ -298,7 +298,6 @@ CMakeFiles/ScreenshotCapture.dir/main.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qlayoutitem.h \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qboxlayout.h \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qgridlayout.h \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QHBoxLayout \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QLabel \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qlabel.h \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qframe.h \
@@ -320,6 +319,9 @@ CMakeFiles/ScreenshotCapture.dir/main.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qpushbutton.h \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qabstractbutton.h \
  /usr/include/x86_64-linux-gnu/qt5/QtGui/qicon.h \
+ /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QMessageBox \
+ /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qmessagebox.h \
+ /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qdialog.h \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QFileDialog \
  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qfiledialog.h \
  /usr/include/x86_64-linux-gnu/qt5/QtCore/qdir.h \
@@ -327,35 +329,38 @@ CMakeFiles/ScreenshotCapture.dir/main.cpp.o: \
  /usr/include/x86_64-linux-gnu/qt5/QtCore/qfile.h \
  /usr/include/x86_64-linux-gnu/qt5/QtCore/qfiledevice.h \
  /usr/include/x86_64-linux-gnu/qt5/QtCore/qurl.h \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qdialog.h \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QMessageBox \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qmessagebox.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/QTimer \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qtimer.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qbasictimer.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/QDateTime \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qdatetime.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/QDir \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qdir.h \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QScrollArea \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qscrollarea.h \
- /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qabstractscrollarea.h \
- /usr/include/c++/13/iostream /usr/include/c++/13/ostream \
- /usr/include/c++/13/ios /usr/include/c++/13/bits/basic_ios.h \
- /usr/include/c++/13/bits/locale_facets.h /usr/include/c++/13/cwctype \
- /usr/include/wctype.h /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
+ /usr/include/x86_64-linux-gnu/qt5/QtCore/QThread \
+ /usr/include/x86_64-linux-gnu/qt5/QtCore/qthread.h \
+ /usr/include/x86_64-linux-gnu/qt5/QtCore/qdeadlinetimer.h \
+ /usr/include/x86_64-linux-gnu/qt5/QtCore/qelapsedtimer.h \
+ /usr/include/c++/13/future /usr/include/c++/13/mutex \
+ /usr/include/c++/13/bits/std_mutex.h \
+ /usr/include/c++/13/bits/unique_lock.h \
+ /usr/include/c++/13/condition_variable \
+ /usr/include/c++/13/bits/atomic_futex.h \
+ /usr/include/c++/13/bits/std_thread.h /usr/include/c++/13/filesystem \
+ /usr/include/c++/13/bits/fs_fwd.h /usr/include/c++/13/bits/fs_path.h \
+ /usr/include/c++/13/locale /usr/include/c++/13/bits/locale_facets.h \
+ /usr/include/c++/13/cwctype /usr/include/wctype.h \
+ /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h \
  /usr/include/c++/13/bits/locale_facets.tcc \
- /usr/include/c++/13/bits/basic_ios.tcc \
- /usr/include/c++/13/bits/ostream.tcc /usr/include/c++/13/istream \
- /usr/include/c++/13/bits/istream.tcc /usr/include/c++/13/thread \
- /usr/include/c++/13/bits/std_thread.h \
- /usr/include/c++/13/bits/this_thread_sleep.h /usr/include/c++/13/fstream \
- /usr/include/c++/13/bits/codecvt.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
- /usr/include/c++/13/bits/fstream.tcc /usr/local/include/curl/curl.h \
+ /usr/include/c++/13/bits/locale_facets_nonio.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
+ /usr/include/libintl.h /usr/include/c++/13/bits/codecvt.h \
+ /usr/include/c++/13/bits/locale_facets_nonio.tcc \
+ /usr/include/c++/13/bits/locale_conv.h /usr/include/c++/13/iomanip \
+ /usr/include/c++/13/bits/quoted_string.h /usr/include/c++/13/sstream \
+ /usr/include/c++/13/istream /usr/include/c++/13/ios \
+ /usr/include/c++/13/bits/basic_ios.h \
+ /usr/include/c++/13/bits/basic_ios.tcc /usr/include/c++/13/ostream \
+ /usr/include/c++/13/bits/ostream.tcc \
+ /usr/include/c++/13/bits/istream.tcc \
+ /usr/include/c++/13/bits/sstream.tcc /usr/include/c++/13/codecvt \
+ /usr/include/c++/13/bits/fs_dir.h /usr/include/c++/13/bits/fs_ops.h \
+ /usr/include/c++/13/iostream /usr/local/include/curl/curl.h \
  /usr/local/include/curl/curlver.h /usr/local/include/curl/system.h \
  /usr/include/x86_64-linux-gnu/sys/socket.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h \
@@ -376,26 +381,30 @@ CMakeFiles/ScreenshotCapture.dir/main.cpp.o: \
  /usr/include/x86_64-linux-gnu/sys/time.h /usr/local/include/curl/easy.h \
  /usr/local/include/curl/multi.h /usr/local/include/curl/curl.h \
  /usr/local/include/curl/urlapi.h /usr/local/include/curl/options.h \
- /usr/local/include/curl/header.h /usr/include/c++/13/filesystem \
- /usr/include/c++/13/bits/fs_fwd.h /usr/include/c++/13/bits/fs_path.h \
- /usr/include/c++/13/locale \
- /usr/include/c++/13/bits/locale_facets_nonio.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
- /usr/include/libintl.h /usr/include/c++/13/bits/locale_facets_nonio.tcc \
- /usr/include/c++/13/bits/locale_conv.h /usr/include/c++/13/iomanip \
- /usr/include/c++/13/bits/quoted_string.h /usr/include/c++/13/sstream \
- /usr/include/c++/13/bits/sstream.tcc /usr/include/c++/13/codecvt \
- /usr/include/c++/13/bits/fs_dir.h /usr/include/c++/13/bits/fs_ops.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/QThread \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qthread.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qdeadlinetimer.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qelapsedtimer.h \
- /usr/include/c++/13/future /usr/include/c++/13/mutex \
- /usr/include/c++/13/bits/std_mutex.h \
- /usr/include/c++/13/bits/unique_lock.h \
- /usr/include/c++/13/condition_variable \
- /usr/include/c++/13/bits/atomic_futex.h \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/QObject \
- /usr/include/x86_64-linux-gnu/qt5/QtCore/qobject.h \
+ /usr/local/include/curl/header.h /usr/include/c++/13/fstream \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
+ /usr/include/c++/13/bits/fstream.tcc /usr/include/c++/13/thread \
+ /usr/include/c++/13/bits/this_thread_sleep.h /usr/include/c++/13/cmath \
+ /usr/include/math.h /usr/include/x86_64-linux-gnu/bits/math-vector.h \
+ /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
+ /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
+ /usr/include/x86_64-linux-gnu/bits/fp-logb.h \
+ /usr/include/x86_64-linux-gnu/bits/fp-fast.h \
+ /usr/include/x86_64-linux-gnu/bits/mathcalls-helper-functions.h \
+ /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
+ /usr/include/x86_64-linux-gnu/bits/mathcalls-narrow.h \
+ /usr/include/x86_64-linux-gnu/bits/iscanonical.h \
+ /usr/include/c++/13/bits/specfun.h /usr/include/c++/13/tr1/gamma.tcc \
+ /usr/include/c++/13/tr1/special_function_util.h \
+ /usr/include/c++/13/tr1/bessel_function.tcc \
+ /usr/include/c++/13/tr1/beta_function.tcc \
+ /usr/include/c++/13/tr1/ell_integral.tcc \
+ /usr/include/c++/13/tr1/exp_integral.tcc \
+ /usr/include/c++/13/tr1/hypergeometric.tcc \
+ /usr/include/c++/13/tr1/legendre_function.tcc \
+ /usr/include/c++/13/tr1/modified_bessel_func.tcc \
+ /usr/include/c++/13/tr1/poly_hermite.tcc \
+ /usr/include/c++/13/tr1/poly_laguerre.tcc \
+ /usr/include/c++/13/tr1/riemann_zeta.tcc \
  /home/ssv/code/ScreenCard/build/ScreenshotCapture_autogen/include/main.moc

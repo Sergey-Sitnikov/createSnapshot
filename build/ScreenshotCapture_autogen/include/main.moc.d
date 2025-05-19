@@ -89,6 +89,7 @@
   /usr/include/c++/13/bits/shared_ptr.h \
   /usr/include/c++/13/bits/shared_ptr_atomic.h \
   /usr/include/c++/13/bits/shared_ptr_base.h \
+  /usr/include/c++/13/bits/specfun.h \
   /usr/include/c++/13/bits/std_abs.h \
   /usr/include/c++/13/bits/std_function.h \
   /usr/include/c++/13/bits/std_mutex.h \
@@ -128,6 +129,7 @@
   /usr/include/c++/13/chrono \
   /usr/include/c++/13/climits \
   /usr/include/c++/13/clocale \
+  /usr/include/c++/13/cmath \
   /usr/include/c++/13/codecvt \
   /usr/include/c++/13/compare \
   /usr/include/c++/13/concepts \
@@ -180,6 +182,18 @@
   /usr/include/c++/13/string_view \
   /usr/include/c++/13/system_error \
   /usr/include/c++/13/thread \
+  /usr/include/c++/13/tr1/bessel_function.tcc \
+  /usr/include/c++/13/tr1/beta_function.tcc \
+  /usr/include/c++/13/tr1/ell_integral.tcc \
+  /usr/include/c++/13/tr1/exp_integral.tcc \
+  /usr/include/c++/13/tr1/gamma.tcc \
+  /usr/include/c++/13/tr1/hypergeometric.tcc \
+  /usr/include/c++/13/tr1/legendre_function.tcc \
+  /usr/include/c++/13/tr1/modified_bessel_func.tcc \
+  /usr/include/c++/13/tr1/poly_hermite.tcc \
+  /usr/include/c++/13/tr1/poly_laguerre.tcc \
+  /usr/include/c++/13/tr1/riemann_zeta.tcc \
+  /usr/include/c++/13/tr1/special_function_util.h \
   /usr/include/c++/13/tuple \
   /usr/include/c++/13/type_traits \
   /usr/include/c++/13/typeinfo \
@@ -313,17 +327,12 @@
   /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
   /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
   /usr/include/x86_64-linux-gnu/gnu/stubs.h \
-  /usr/include/x86_64-linux-gnu/qt5/QtCore/QDateTime \
-  /usr/include/x86_64-linux-gnu/qt5/QtCore/QDir \
-  /usr/include/x86_64-linux-gnu/qt5/QtCore/QObject \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/QThread \
-  /usr/include/x86_64-linux-gnu/qt5/QtCore/QTimer \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qalgorithms.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qarraydata.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qatomic.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qatomic_cxx11.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qbasicatomic.h \
-  /usr/include/x86_64-linux-gnu/qt5/QtCore/qbasictimer.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qbytearray.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qbytearraylist.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qcalendar.h \
@@ -386,7 +395,6 @@
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qsystemdetection.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qtcore-config.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qthread.h \
-  /usr/include/x86_64-linux-gnu/qt5/QtCore/qtimer.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qtypeinfo.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qurl.h \
   /usr/include/x86_64-linux-gnu/qt5/QtCore/qvariant.h \
@@ -424,17 +432,14 @@
   /usr/include/x86_64-linux-gnu/qt5/QtGui/qwindowdefs.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QApplication \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QFileDialog \
-  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QHBoxLayout \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QLabel \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QLineEdit \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QMessageBox \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QPushButton \
-  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QScrollArea \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QTimeEdit \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QVBoxLayout \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/QWidget \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qabstractbutton.h \
-  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qabstractscrollarea.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qabstractspinbox.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qapplication.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qboxlayout.h \
@@ -449,7 +454,6 @@
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qlineedit.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qmessagebox.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qpushbutton.h \
-  /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qscrollarea.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qsizepolicy.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qtwidgets-config.h \
   /usr/include/x86_64-linux-gnu/qt5/QtWidgets/qtwidgetsglobal.h \
