@@ -17,53 +17,48 @@
 #include <fstream>
 #include <chrono>
 #include <thread>
-#include <cmath>  // Для std::cos и M_PI
-#include <limits> // Для std::numeric_limits
+#include <cmath>    // Для std::cos, std::floor, M_PI
+#include <limits>   // Для std::numeric_limits
+#include <cstdio>   // Для snprintf
+#include <algorithm> // Для std::max
 
 // Глобальные переменные с параметрами
 std::vector<std::pair<double, double>> coordinat; // Координаты для скриншотов
 // coordinat_centr будет считываться из GUI
-int capture_interval = 3600; // Интервал в секундах
+int capture_interval = 3600;                   // Интервал в секундах
 std::string start_time = "07:00";
 std::string end_time = "23:00";
-int radius = 5;    // Радиус в км (значение по умолчанию)
-int count_row = 3; // Количество точек по каждой оси сетки (значение по умолчанию)
+int radius = 5; // Радиус в км (значение по умолчанию)
 
 // Путь по умолчанию для сохранения скриншотов
 std::string screenshot_directory = "./screenshots";
 
 // Поток для выполнения захвата скриншотов
-class CaptureThread : public QThread
-{
+class CaptureThread : public QThread {
     Q_OBJECT
 
 public:
-    CaptureThread(QObject *parent = nullptr) : QThread(parent), running(true) {}
+    CaptureThread(QObject* parent = nullptr) : QThread(parent), running(true) {}
 
-    void setDirectory(const std::string &directory) { saving_directory = directory; }
+    void setDirectory(const std::string& directory) { saving_directory = directory; }
 
     // Метод для безопасной остановки потока
-    void stop()
-    {
+    void stop() {
         running = false;
     }
 
-    void run() override
-    {
+    void run() override {
         running = true; // Сбрасываем флаг при старте
-        while (running)
-        { // Проверяем флаг в условии цикла
+        while (running) { // Проверяем флаг в условии цикла
             std::time_t now = std::time(nullptr);
-            std::tm *current_time = std::localtime(&now);
+            std::tm* current_time = std::localtime(&now);
 
             // Проверка по времени
             if (current_time->tm_hour < std::stoi(start_time.substr(0, 2)) ||
-                current_time->tm_hour >= std::stoi(end_time.substr(0, 2)))
-            {
+                current_time->tm_hour >= std::stoi(end_time.substr(0, 2))) {
                 // Ждем до следующей проверки времени, но не блокируем возможность остановки
                 auto start_sleep = std::chrono::high_resolution_clock::now();
-                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep).count() < 60)
-                {
+                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep).count() < 60) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Короткие интервалы сна
                 }
                 continue;
@@ -73,20 +68,17 @@ public:
             // Доступ к глобальному вектору 'coordinat' должен быть синхронизирован
             // в многопоточном приложении, если он может изменяться во время выполнения run().
             // Здесь предполагается, что он заполняется только перед стартом потока.
-            if (coordinat.empty())
-            {
+            if (coordinat.empty()) {
                 std::cerr << "Список координат пуст. Захват невозможен." << std::endl;
                 // Ждем интервал захвата, чтобы не зацикливаться, но с возможностью остановки
                 auto start_sleep = std::chrono::high_resolution_clock::now();
-                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep).count() < capture_interval)
-                {
+                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep).count() < capture_interval) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
                 continue;
             }
 
-            for (size_t u = 0; u < coordinat.size(); ++u)
-            {
+            for (size_t u = 0; u < coordinat.size(); ++u) {
                 if (!running)
                     break; // Проверяем флаг остановки перед каждым снимком
                 createSnapshot(coordinat[u], saving_directory, "Скриншот_%Y-%m-%d_%H-%M-%S", static_cast<int>(u), current_time);
@@ -94,8 +86,7 @@ public:
 
             // Ждем до следующего захвата, также проверяя флаг остановки
             auto start_sleep = std::chrono::high_resolution_clock::now();
-            while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep).count() < capture_interval)
-            {
+            while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep).count() < capture_interval) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Короткие интервалы сна
             }
         }
@@ -103,104 +94,105 @@ public:
     }
 
 signals:
-    void snapshotDone(const QString &filename); // Сигнал при успешном сохранении
+    void snapshotDone(const QString& filename); // Сигнал при успешном сохранении
 
 private:
     std::string saving_directory;
     bool running; // Флаг для управления выполнением потока
 
-    void createSnapshot(std::pair<double, double> url, const std::string &directory, const std::string &format, int index, std::tm *current_time)
-    {
+    void createSnapshot(std::pair<double, double> url, const std::string& directory, const std::string& format, int index, std::tm* current_time) {
         char buffer[80];
         std::strftime(buffer, sizeof(buffer), format.c_str(), current_time);
         std::string file_name = directory + "/" + buffer + "_" + std::to_string(index) + ".png";
 
         // Проверяем существование папки
-        if (!std::filesystem::exists(directory))
-        {
+        if (!std::filesystem::exists(directory)) {
             std::cerr << "Каталог не существует: " << directory << std::endl;
             return;
         }
 
         // Формируем URL запроса к API Yandex Static Maps
         // Порядок координат: долгота, широта (lon,lat)
-        // spn - Specifies the map area. Parameter value: lon,lat (in degrees).
-        // spn=0.01,0.01 соответствует примерно 1 км x 1 км на экваторе, но меняется с широтой.
-        // Для съемки по радиусу, spn должен быть связан с этим радиусом и размером изображения.
-        // Или использовать параметр z (уровень масштаба). Давайте попробуем с z.
-        // z=10 покрывает область примерно 10км, z=13 примерно 1км.
+        // Используем snprintf для форматирования double с точкой в качестве разделителя
+        char lat_str[32]; // Буфер для строки широты
+        char lon_str[32]; // Буфер для строки долготы
 
-        // std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=" +
-        //                       std::to_string(url.second) + "," + std::to_string(url.first) +
-        //                       "&size=650,450&z=13&l=map,trf"; // Использован масштаб z=13
-        std::locale::global(std::locale("C"));
+        // Форматируем double с фиксированной точностью (например, 8 знаков после запятой)
+        // snprintf в стандартной C локали всегда использует точку для десятичного разделителя
+        snprintf(lat_str, sizeof(lat_str), "%.8f", url.first);
+        snprintf(lon_str, sizeof(lon_str), "%.8f", url.second);
 
-        std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=" +
+        // Используем spn для указания области. spn=lon,lat в градусах.
+        // Ширина и высота охватываемой области карты (в градусах).
+        // Можно связать spn с радиусом и размером изображения, но проще использовать фиксированный масштаб z.
+        // z=13 соответствует области примерно 1км x 0.7км на средних широтах.
+        // Если мы генерируем точки сетки с шагом 0.02 градуса (~2.2 км), то z=13 слишком крупный масштаб для одной точки.
+        // Давайте попробуем z=10 (~10 км) или z=11 (~5 км), или z=12 (~2.5 км) чтобы видеть окружающие точки.
+        // Выберем z=11 как компромисс. Или можно попробовать использовать spn, например spn=0.02,0.02
+        // чтобы каждая картинка показывала квадрат 0.02x0.02 градуса.
+
+         std::locale::global(std::locale("C"));
+
+         std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=" +
                               std::to_string(url.second) + "," + std::to_string(url.first) +
                               "&spn=0.01,0.01&size=450,450&l=map,trf";
 
-       // std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=39,45&spn=0.01,0.01&size=450,450&l=map,trf";
-        std::cout << "x " << url.first << ", y " << url.second << std::endl;
+        // Если хотите, чтобы каждый снимок охватывал площадь 0.02x0.02 градуса:
+        // std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=" +
+        //                       std::string(lon_str) + "," + std::string(lat_str) +
+        //                       "&size=650,450&spn=0.02,0.02&l=map,trf";
+
+
+        // std::cout << "Request URL: " << api_url << std::endl; // Для отладки
 
         CURL *curl = curl_easy_init();
-        if (curl)
-        {
+        if (curl) {
             FILE *file = fopen(file_name.c_str(), "wb");
-            if (file)
-            {
+            if (file) {
                 curl_easy_setopt(curl, CURLOPT_URL, api_url.c_str());
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
                 curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
-                curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
-                curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L); // Можно отключить подробный вывод CURL
+                curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Добавляем проверку ошибок HTTP
+                curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L); // Можно включить для подробного вывода CURL
 
                 CURLcode res = curl_easy_perform(curl);
+                long http_code = 0;
+                curl_easy_getinfo(curl, CURLINFO_HTTP_CODE, &http_code); // Получаем HTTP статус
+
                 fclose(file);
 
-                if (res == CURLE_OK)
-                {
+                if (res == CURLE_OK && http_code >= 200 && http_code < 300) {
                     std::ifstream ifs(file_name, std::ios::binary | std::ios::ate);
-                    if (ifs.is_open() && ifs.tellg() > 0)
-                    { // Проверяем, что файл открыт и не пустой
+                    if (ifs.is_open() && ifs.tellg() > 0) { // Проверяем, что файл открыт и не пустой
                         std::cout << "Скриншот сохранен: " << file_name << std::endl;
                         // emit snapshotDone(QString::fromStdString(file_name)); // Генерируем сигнал
-                    }
-                    else
-                    {
+                    } else {
                         std::cerr << "Ошибка: пустой или не открытый файл -> " << file_name << std::endl;
                         std::remove(file_name.c_str()); // Удаляем пустой файл
                     }
+                } else {
+                    std::cerr << "CURL Ошибка (код: " << res << ", HTTP: " << http_code << ") при загрузке " << api_url << ": " << curl_easy_strerror(res) << std::endl;
+                    std::remove(file_name.c_str()); // Удаляем файл, если была ошибка CURL или HTTP
                 }
-                else
-                {
-                    std::cerr << "CURL Ошибка при загрузке " << api_url << ": " << curl_easy_strerror(res) << std::endl;
-                    std::remove(file_name.c_str()); // Удаляем файл, если была ошибка CURL
-                }
-            }
-            else
-            {
+            } else {
                 std::cerr << "Ошибка при открытии файла для записи: " << file_name << std::endl;
             }
             curl_easy_cleanup(curl);
-        }
-        else
-        {
+        } else {
             std::cerr << "Ошибка инициализации CURL." << std::endl;
         }
     }
 };
 
 // Основное окно приложения
-class SnapshotApp : public QWidget
-{
+class SnapshotApp : public QWidget {
     Q_OBJECT
 
 public:
-    SnapshotApp(QWidget *parent = nullptr) : QWidget(parent)
-    {
+    SnapshotApp(QWidget* parent = nullptr) : QWidget(parent) {
         setWindowTitle("Снимки карты");
 
-        QVBoxLayout *layout = new QVBoxLayout(this);
+        QVBoxLayout* layout = new QVBoxLayout(this);
 
         // Установка времени
         startTimeEdit = new QTimeEdit(QTime::fromString(QString::fromStdString(start_time), "hh:mm"));
@@ -227,9 +219,7 @@ public:
         layout->addWidget(new QLabel("Радиус съемки (км):"));
         layout->addWidget(radiusEdit);
 
-        countRowEdit = new QLineEdit(QString::number(count_row)); // Добавляем поле для количества точек
-        layout->addWidget(new QLabel("Точек по оси сетки:"));
-        layout->addWidget(countRowEdit);
+        // Удалено: Поле для количества точек countRowEdit
 
         // Поле для указания пути
         dirEdit = new QLineEdit(QString::fromStdString(screenshot_directory));
@@ -237,17 +227,17 @@ public:
         layout->addWidget(dirEdit);
 
         // Кнопка для выбора пути
-        QPushButton *browseButton = new QPushButton("Обзор...");
+        QPushButton* browseButton = new QPushButton("Обзор...");
         layout->addWidget(browseButton);
         connect(browseButton, &QPushButton::clicked, this, &SnapshotApp::browseDirectory);
 
         // Кнопка для старта
-        QPushButton *startButton = new QPushButton("Начать съемку");
+        QPushButton* startButton = new QPushButton("Начать съемку");
         layout->addWidget(startButton);
         connect(startButton, &QPushButton::clicked, this, &SnapshotApp::startCapture);
 
         // Кнопка для остановки
-        QPushButton *stopButton = new QPushButton("Остановить съемку");
+        QPushButton* stopButton = new QPushButton("Остановить съемку");
         layout->addWidget(stopButton);
         connect(stopButton, &QPushButton::clicked, this, &SnapshotApp::stopCapture);
 
@@ -260,15 +250,12 @@ public:
         curl_global_init(CURL_GLOBAL_DEFAULT);
     }
 
-    ~SnapshotApp()
-    {
+    ~SnapshotApp() {
         // Очищаем библиотеку CURL
         curl_global_cleanup();
         // Убедимся, что поток остановлен и удален
-        if (captureThread)
-        {
-            if (captureThread->isRunning())
-            {
+        if (captureThread) {
+            if (captureThread->isRunning()) {
                 captureThread->stop(); // Сигнализируем потоку об остановке
                 captureThread->wait(); // Ждем завершения потока
             }
@@ -277,11 +264,9 @@ public:
     }
 
 public slots:
-    void startCapture()
-    {
+    void startCapture() {
         // Проверяем, не запущен ли поток уже
-        if (captureThread && captureThread->isRunning())
-        {
+        if (captureThread && captureThread->isRunning()) {
             QMessageBox::warning(this, "Предупреждение", "Захват уже запущен. Остановите его, прежде чем начать новый.");
             return;
         }
@@ -290,21 +275,12 @@ public slots:
         start_time = startTimeEdit->time().toString("hh:mm").toStdString();
         end_time = endTimeEdit->time().toString("hh:mm").toStdString();
         capture_interval = intervalEdit->text().toInt();
-        radius = radiusEdit->text().toInt();      // Читаем значение радиуса
-        count_row = countRowEdit->text().toInt(); // Читаем значение количества точек
-
-        // Валидация count_row
-        if (count_row <= 0)
-        {
-            QMessageBox::critical(this, "Ошибка", "Количество точек по оси сетки должно быть больше 0.");
-            return;
-        }
+        radius = radiusEdit->text().toInt(); // Читаем значение радиуса
 
         screenshot_directory = dirEdit->text().toStdString();
 
         // Проверяем существование каталога
-        if (!std::filesystem::exists(screenshot_directory))
-        {
+        if (!std::filesystem::exists(screenshot_directory)) {
             QMessageBox::critical(this, "Ошибка", "Указанный каталог не существует.");
             return;
         }
@@ -317,123 +293,100 @@ public slots:
         // Очищаем предыдущий список координат для съемки
         coordinat.clear();
 
-        // Генерируем координаты сетки на основе центра, радиуса и количества точек
+        // --- Генерируем координаты сетки на основе центра и радиуса (1 км = 0.01 градуса) ---
         double lat0 = current_coordinat_centr.first;
         double lon0 = current_coordinat_centr.second;
         double r_km = static_cast<double>(radius); // Радиус в километрах
-        int N = count_row;                         // Количество точек по одной оси сетки
 
-        // Простая аппроксимация шага в градусах
-        // Примерно 1 градус широты ~ 111 км
-        // Примерно 1 градус долготы ~ 111 * cos(широта) км
-        double cos_lat0 = std::cos(lat0 * M_PI / 180.0);
-        // Защита от деления на ноль или очень маленькое число вблизи полюсов
-        if (std::abs(cos_lat0) < std::numeric_limits<double>::epsilon())
-        {
-            cos_lat0 = std::numeric_limits<double>::epsilon();
-        }
+        // Правило: 1 км = 0.01 градуса
+        const double km_to_deg = 0.01;
+        const double step_deg = 0.02; // Фиксированный шаг сетки в градусах (как в старом коде)
 
-        // Общий охват в градусах для сетки
-        // Умножаем на 2, т.к. радиус - это расстояние от центра, а сетка охватывает 2*радиус
-        double total_lat_span_deg = (2.0 * r_km) / 111.0;
-        double total_lon_span_deg = (2.0 * r_km) / (111.0 * cos_lat0);
+        // Общий охват в градусах, соответствующий радиусу R
+        // Это расстояние от центра до края области по каждому направлению.
+        double span_from_center_deg = r_km * km_to_deg;
 
-        // Шаг между точками сетки в градусах
-        double lat_step = (N > 1) ? total_lat_span_deg / (N - 1) : 0;
-        double lon_step = (N > 1) ? total_lon_span_deg / (N - 1) : 0;
+        // Количество шагов (интервалов 0.02 градуса) от центра до края
+        int num_steps_from_center = static_cast<int>(std::floor(span_from_center_deg / step_deg));
 
-        // Начальная точка сетки (нижний левый угол)
-        double start_lat = lat0 - total_lat_span_deg / 2.0;
-        double start_lon = lon0 - total_lon_span_deg / 2.0;
+        // Общее количество точек вдоль одной оси (включая центральную)
+        // 2 * num_steps_from_center для обеих сторон от центра + 1 для центральной точки
+        int N = std::max(1, 2 * num_steps_from_center + 1);
+
+        // Начальная координата сетки (нижний левый угол)
+        // Сдвигаемся от центра на (N-1)/2 шагов влево и вниз
+        double start_lat = lat0 - (N - 1) / 2.0 * step_deg;
+        double start_lon = lon0 - (N - 1) / 2.0 * step_deg;
 
         // Генерация точек сетки
-        for (int yy = 0; yy < N; ++yy)
-        {
-            for (int xx = 0; xx < N; ++xx)
-            {
-                double current_lat = start_lat + yy * lat_step;
-                double current_lon = start_lon + xx * lon_step;
+        for (int yy = 0; yy < N; ++yy) {
+            for (int xx = 0; xx < N; ++xx) {
+                double current_lat = start_lat + yy * step_deg;
+                double current_lon = start_lon + xx * step_deg;
                 coordinat.push_back({current_lat, current_lon});
             }
         }
+        // --- Конец генерации координат ---
+
 
         std::cout << "Сгенерировано " << coordinat.size() << " координат для съемки." << std::endl;
+
 
         // Передаем каталог потоку
         captureThread->setDirectory(screenshot_directory);
 
         // Запускаем поток
         captureThread->start();
-       // QMessageBox::information(this, "Информация", "Съемка начата.");
+        // QMessageBox::information(this, "Информация", "Съемка начата."); // Лучше не показывать для каждого запуска
     }
 
-    void stopCapture()
-    {
-        if (captureThread && captureThread->isRunning())
-        {
+    void stopCapture() {
+        if (captureThread && captureThread->isRunning()) {
             captureThread->stop(); // Сигнализируем потоку об остановке
             // Не вызываем wait() здесь, чтобы не блокировать основной поток GUI
-        }
-        else
-        {
+        } else {
             QMessageBox::information(this, "Информация", "Захват не запущен.");
         }
     }
 
-    void browseDirectory()
-    {
+    void browseDirectory() {
         QString directory = QFileDialog::getExistingDirectory(this, "Выбор каталога", QString::fromStdString(screenshot_directory));
-        if (!directory.isEmpty())
-        {
+        if (!directory.isEmpty()) {
             dirEdit->setText(directory);
         }
     }
 
-    void onSnapshotDone(const QString &filename)
-    {
+    void onSnapshotDone(const QString& filename) {
         // Можно вывести сообщение о каждом сохраненном снимке
         // std::cout << "Сигнал получен: Снимок сохранен: " << filename.toStdString() << std::endl;
         // Или обновить что-то в GUI
     }
 
 private:
-    QTimeEdit *startTimeEdit;
-    QTimeEdit *endTimeEdit;
-    QLineEdit *intervalEdit;
-    QLineEdit *latEdit;
-    QLineEdit *lonEdit;
-    QLineEdit *radiusEdit;
-    QLineEdit *countRowEdit; // Поле для количества точек
-    QLineEdit *dirEdit;
-    CaptureThread *captureThread;
+    QTimeEdit* startTimeEdit;
+    QTimeEdit* endTimeEdit;
+    QLineEdit* intervalEdit;
+    QLineEdit* latEdit;
+    QLineEdit* lonEdit;
+    QLineEdit* radiusEdit;
+    // Удалено: QLineEdit* countRowEdit;
+    QLineEdit* dirEdit;
+    CaptureThread* captureThread;
     // coordinat является глобальным
 };
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
 
-    // Удаляем устаревший код генерации координат из main
-    // coordinat.push_back(coordinat_centr);
-    // count_row = ((radius - 0.8) / 1.6) * 2 + 3;
-    // if (count_row < 1)
-    // count_row = 1;
-    // double x = coordinat_centr.second - ((count_row - 1) / 2 * 0.02);
-    // double y = coordinat_centr.first - ((count_row - 1) / 2 * 0.02);
-    // for (int yy = 0; yy <= count_row - 1; ++yy) {
-    //     for (int xx = 0; xx <= count_row - 1; ++xx) {
-    //         coordinat.push_back({x + xx * 0.02, y + yy * 2}); // Исправлен синтаксис
-    //     }
-    // }
+    // Удаляем устаревший код генерации координат из main (он перенесен в startCapture)
 
     // Создание стандартной папки, если ее нет
-    if (!std::filesystem::exists(screenshot_directory))
-    {
+    if (!std::filesystem::exists(screenshot_directory)) {
         std::filesystem::create_directory(screenshot_directory);
     }
 
     SnapshotApp window;
-    window.resize(400, 500); // Увеличен размер окна
+    window.resize(400, 450); // Уменьшен размер окна, т.к. убрано одно поле
     window.show();
 
     return app.exec();
