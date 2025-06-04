@@ -474,7 +474,7 @@ private:
         // Убедиться, что locale установлено в "C" для стандартного форматирования десятичной точки (точка)
         // Это критически важно для std::to_string, используемого ниже, хотя snprintf был безопаснее.
         // Давайте вернем snprintf, который не зависит от locale.
-        std::locale::global(std::locale("C"));
+        //  std::locale::global(std::locale("C"));
         // std::cout << url.first << " " << url.second << std::endl;
         // std::cout << url.first + 0.02 << " " << url.second + 0.02 << std::endl;
 
@@ -572,12 +572,18 @@ public:
         layout->addWidget(intervalEdit);
 
         latEdit = new QLineEdit(QString::number(0.0));
-        latEdit->setValidator(new QDoubleValidator(-90.0, 90.0, 8, this)); // Валидатор широты
+        // latEdit->setValidator(new QDoubleValidator(-90.0, 90.0, 8, this)); // Валидатор широты-
+        QDoubleValidator *validatorlat = new QDoubleValidator(-90.0, 90.0, 8, this);
+        validatorlat->setLocale(QLocale::c()); // Устанавливаем локаль
+        latEdit->setValidator(validatorlat);
         layout->addWidget(new QLabel("Широта центра:"));
         layout->addWidget(latEdit);
 
         lonEdit = new QLineEdit(QString::number(0.0));
-        lonEdit->setValidator(new QDoubleValidator(-180.0, 180.0, 8, this)); // Валидатор долготы
+      //  lonEdit->setValidator(new QDoubleValidator(-180.0, 180.0, 8, this)); // Валидатор долготы
+       QDoubleValidator *validatorlon = new QDoubleValidator(-180.0, 180.0, 8, this);
+        validatorlon->setLocale(QLocale::c()); // Устанавливаем локаль
+        lonEdit->setValidator(validatorlon);
         layout->addWidget(new QLabel("Долгота центра:"));
         layout->addWidget(lonEdit);
 
@@ -719,7 +725,7 @@ public slots:
         // Градусы долготы зависят от широты (cos(lat)).
         // Используется фиксированный шаг 0.02 градуса между точками сетки.
         const double deg_per_km_at_equator = 0.01; // Примерно градусов на км для широты/долготы на экваторе
-        const double step_deg_x = 0.0193;            // Фиксированный шаг сетки в градусах
+        const double step_deg_x = 0.0193;          // Фиксированный шаг сетки в градусах
         const double step_deg_y = 0.0137;
 
         // Вычислить общий диапазон в градусах, необходимый для покрытия радиуса R с шагом step_deg
@@ -748,8 +754,8 @@ public slots:
 
         // Вычислить начальную координату сетки (левый нижний угол)
         // Сдвиг от центра на (N-1)/2 шагов влево и вниз.
-        double start_lat = lat0 - (N - 1) / 2.0 * step_deg_y;
-        double start_lon = lon0 - (N - 1) / 2.0 * step_deg_x;
+        double start_lat = lat0 - (N - 1) / 2.0 * step_deg_y - step_deg_y / 2;
+        double start_lon = lon0 - (N - 1) / 2.0 * step_deg_x - step_deg_x / 2;
 
         // Генерация точек сетки
         for (int yy = 0; yy < N; ++yy)
@@ -763,7 +769,7 @@ public slots:
         }
         // --- Конец генерации координат ---
 
-       // std::cout << "Генерация сетки: Радиус=" << radius << " км, Шаг=" << step_deg << " град. => Сетка " << N << "x" << N << " = " << coordinat.size() << " координат." << std::endl;
+        // std::cout << "Генерация сетки: Радиус=" << radius << " км, Шаг=" << step_deg << " град. => Сетка " << N << "x" << N << " = " << coordinat.size() << " координат." << std::endl;
 
         // Создать новый экземпляр потока
         captureThread = new CaptureThread();
@@ -823,7 +829,7 @@ private:
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-
+    std::locale::global(std::locale("C"));
     // Создать каталог по умолчанию для окончательных скриншотов, если он не существует
     std::error_code ec;
     if (!std::filesystem::exists(screenshot_directory))
