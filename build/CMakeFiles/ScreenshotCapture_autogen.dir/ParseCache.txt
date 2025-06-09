@@ -331,7 +331,12 @@
  mdp:/usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  mdp:/usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  mdp:/usr/include/x86_64-linux-gnu/gnu/stubs.h
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/QDir
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/QFile
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/QFileInfo
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/QStringList
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/QThread
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/QtGlobal
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/qalgorithms.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/qarraydata.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/qatomic.h
@@ -405,6 +410,8 @@
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/qvarlengtharray.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/qvector.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtCore/qversiontagging.h
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/QImage
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/QPainter
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qbrush.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qcolor.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qcursor.h
@@ -418,6 +425,7 @@
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qkeysequence.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qmatrix.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qpaintdevice.h
+ mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qpainter.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qpalette.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qpen.h
  mdp:/usr/include/x86_64-linux-gnu/qt5/QtGui/qpixelformat.h
