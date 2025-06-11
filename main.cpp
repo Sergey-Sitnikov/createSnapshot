@@ -1,13 +1,19 @@
 #include <QApplication>
 #include <QWidget>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QTimeEdit>
 #include <QPushButton>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QListWidget>
 #include <QThread>
+#include <QIntValidator>
+#include <QDoubleValidator>
+#include <QGroupBox>
+
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -17,13 +23,14 @@
 #include <fstream>
 #include <chrono>
 #include <thread>
-#include <cmath>     // Для std::cos, std::floor, M_PI, std::sqrt
-#include <limits>    // Для std::numeric_limits
-#include <cstdio>    // Для snprintf
-#include <algorithm> // Для std::max, std::sort
-#include <vector>    // Для std::vector
-#include <cerrno>    // Для ошибок filesystem
-#include <locale>    // Для std::locale (используется, но может быть избыточным с snprintf)
+#include <cmath>
+#include <limits>
+#include <cstdio>
+#include <algorithm>
+#include <vector>
+#include <cerrno>
+#include <locale>
+#include <sstream> // Для std::ostringstream
 
 // Qt Image/Painter/Dir includes
 #include <QImage>
@@ -32,97 +39,100 @@
 #include <QFileInfo>
 #include <QStringList>
 #include <QFile>
-#include <QtGlobal> // Для qSqrt (если нужно, но std::sqrt из cmath достаточно)
+#include <QtGlobal>
 
-// Глобальные переменные с параметрами
-std::vector<std::pair<double, double>> coordinat; // Координаты для скриншотов
-// coordinat_centr будет считываться из GUI
-int capture_interval = 3600; // Интервал в секундах
-std::string start_time = "07:00";
-std::string end_time = "23:00";
-int radius = 5; // Радиус в км (значение по умолчанию)
+// Класс для хранения параметров одного объекта карты
+class MapObject
+{
+public:
+    double latitude_center;
+    double longitude_center;
+    int radius_km;
+    std::string name;           // Уникальное имя объекта для файлов и логов
+    std::string save_directory; // Каталог для сохранения снимков этого объекта
 
-// Путь по умолчанию для сохранения окончательных скриншотов
-std::string screenshot_directory = "./screenshots";
-// Название временной папки
-const std::string screen_temp_directory_name = "screen_temp";
+    MapObject(double lat, double lon, int rad_km, std::string obj_name, std::string save_dir)
+        : latitude_center(lat), longitude_center(lon), radius_km(rad_km), name(std::move(obj_name)), save_directory(std::move(save_dir)) {}
+
+    // Для отображения в QListWidget
+    QString getDisplayText() const
+    {
+        return QString("Имя: %1, Центр: (%2, %3), Радиус: %4 км, Путь: %5")
+            .arg(QString::fromStdString(name))
+            .arg(latitude_center)
+            .arg(longitude_center)
+            .arg(radius_km)
+            .arg(QString::fromStdString(save_directory));
+    }
+};
+
+// Название временной папки (базовое)
+const std::string screen_temp_directory_name_base = "screen_temp";
 
 // Вспомогательная функция для объединения изображений из временного каталога в один BMP файл.
 // Она обрабатывает файлы из temp_dir и сохраняет результат в output_dir.
 // Горизонтальные ряды объединяются в обратном порядке.
 // Возвращает true в случае успеха, false в случае неудачи.
-bool combineAndCleanupScreenshots(const std::string &temp_dir_path, const std::string &output_dir_path, std::tm *current_time)
+bool combineAndCleanupScreenshots(const std::string &temp_dir_path,
+                                  const std::string &output_dir_path, // Это базовый путь для объекта
+                                  std::tm *current_time,
+                                  const std::string &object_name_identifier)
 {
     QDir tempDir(QString::fromStdString(temp_dir_path));
     if (!tempDir.exists())
     {
         std::cerr << "Временный каталог для объединения не существует: " << temp_dir_path << std::endl;
-        // Попытка очистки с помощью filesystem на случай, если представление QDir устарело или каталог существует частично
         std::error_code ec;
-        std::filesystem::remove_all(temp_dir_path, ec);
+        std::filesystem::remove_all(temp_dir_path, ec); // Попытка очистки
         if (ec)
         {
-            std::cerr << "Ошибка при очистке несуществующего временного каталога с помощью filesystem: " << ec.message() << std::endl;
+            std::cerr << "Ошибка при очистке несуществующего временного каталога (filesystem): " << ec.message() << std::endl;
         }
         return false;
     }
 
     QStringList filters;
-    filters << "*.png"; // Предполагается, что временные файлы являются PNG из Yandex API
-
-    // Получить список файлов и отсортировать их по индексу, встроенному в имя файла
+    filters << "*.png";
     QFileInfoList fileList = tempDir.entryInfoList(filters, QDir::Files, QDir::Name);
 
     if (fileList.isEmpty())
     {
-        std::cerr << "Временные скриншоты в каталоге " << temp_dir_path << " не найдены. Объединение пропущено." << std::endl;
-        // Очистить пустой временный каталог с помощью filesystem
+        std::cerr << "Временные скриншоты в каталоге " << temp_dir_path << " не найдены. Объединение пропущено для объекта " << object_name_identifier << "." << std::endl;
         std::error_code ec;
         std::filesystem::remove_all(temp_dir_path, ec);
         if (ec)
         {
-            std::cerr << "Ошибка при очистке пустого временного каталога с помощью filesystem: " << ec.message() << std::endl;
+            std::cerr << "Ошибка при очистке пустого временного каталога (filesystem): " << ec.message() << std::endl;
         }
         return false;
     }
 
-    // Сортировка файлов по индексу, встроенному в имя файла
-    // Ожидается формат имени файла: "Скриншот_YYYY-MM-DD_HH-MM-SS_X.png", где X - индекс
     std::sort(fileList.begin(), fileList.end(), [](const QFileInfo &a, const QFileInfo &b)
               {
         QString name_a = a.baseName();
         QString name_b = b.baseName();
         int last_underscore_a = name_a.lastIndexOf('_');
         int last_underscore_b = name_b.lastIndexOf('_');
-
-        int index_a = -1, index_b = -1; // Использовать -1 для неверного индекса
-
-        if (last_underscore_a != -1) {
-            index_a = name_a.mid(last_underscore_a + 1).toInt();
-        }
-        if (last_underscore_b != -1) {
-            index_b = name_b.mid(last_underscore_b + 1).toInt();
-        }
-
+        int index_a = (last_underscore_a != -1) ? name_a.mid(last_underscore_a + 1).toInt() : -1;
+        int index_b = (last_underscore_b != -1) ? name_b.mid(last_underscore_b + 1).toInt() : -1;
         return index_a < index_b; });
 
-    // Определить размер сетки N по количеству файлов
     int total_images = fileList.size();
-    int N = static_cast<int>(std::sqrt(total_images));
-    // Проверить, является ли total_images полным квадратом
-    if (N * N != total_images)
+    int N_grid_dim = static_cast<int>(std::sqrt(static_cast<double>(total_images)));
+
+    if (N_grid_dim * N_grid_dim != total_images)
     {
-        std::cerr << "Ошибка: Общее количество скриншотов (" << total_images << ") не является полным квадратом (" << N << "x" << N << "). Невозможно сформировать сетку. Временные файлы сохранены для проверки в " << temp_dir_path << std::endl;
-        // В этом конкретном случае ошибки НЕ очищать временные файлы, пользователь может захотеть их увидеть.
-        return false;
+        std::cerr << "Ошибка для объекта " << object_name_identifier << ": Общее количество скриншотов (" << total_images
+                  << ") не является полным квадратом. Невозможно сформировать сетку " << N_grid_dim << "x" << N_grid_dim
+                  << ". Временные файлы сохранены в " << temp_dir_path << std::endl;
+        return false; // НЕ очищать временные файлы в этом случае
     }
 
-    // Загрузить первое изображение, чтобы получить размеры (предполагается, что все изображения имеют одинаковые размеры)
     QImage firstImage(fileList.first().absoluteFilePath());
     if (firstImage.isNull())
     {
-        std::cerr << "Ошибка загрузки первого изображения: " << fileList.first().absoluteFilePath().toStdString() << ". Невозможно определить размеры." << std::endl;
-        // Очистить временные файлы с помощью filesystem
+        std::cerr << "Ошибка загрузки первого изображения для объекта " << object_name_identifier << ": "
+                  << fileList.first().absoluteFilePath().toStdString() << std::endl;
         std::error_code ec;
         std::filesystem::remove_all(temp_dir_path, ec);
         if (ec)
@@ -134,79 +144,73 @@ bool combineAndCleanupScreenshots(const std::string &temp_dir_path, const std::s
 
     int img_width = firstImage.width();
     int img_height = firstImage.height();
+    int composite_width = N_grid_dim * img_width;
+    int composite_height = N_grid_dim * img_height;
 
-    // Создать холст для окончательного композитного изображения
-    int composite_width = N * img_width;
-    int composite_height = N * img_height;
-
-    // Использовать формат RGB32, подходящий для сохранения в BMP
     QImage compositeImage(composite_width, composite_height, QImage::Format_RGB32);
-    compositeImage.fill(Qt::white); // Залить белым фоном
-
+    compositeImage.fill(Qt::white);
     QPainter painter(&compositeImage);
-    painter.setRenderHint(QPainter::Antialiasing, false); // Сглаживание не требуется для отрисовки изображений
 
-    // Отрисовать каждое изображение на композитный холст в соответствующей позиции сетки
     for (int i = 0; i < total_images; ++i)
     {
         QImage img(fileList.at(i).absoluteFilePath());
         if (img.isNull())
         {
-            std::cerr << "Ошибка загрузки изображения: " << fileList.at(i).absoluteFilePath().toStdString() << ". Пропускаем отрисовку этого файла." << std::endl;
-            // Решите, как обрабатывать отсутствующие изображения в композите - оставить пустое место - один из вариантов.
+            std::cerr << "Ошибка загрузки изображения: " << fileList.at(i).absoluteFilePath().toStdString() << ". Пропуск." << std::endl;
             continue;
         }
-
-        // Вычислить позицию в сетке (строка и столбец) из индекса
-        int row = i / N; // Строка на основе отсортированного индекса (от 0 до N-1)
-        int col = i % N; // Столбец на основе отсортированного индекса (от 0 до N-1)
-
-        // Вычислить индекс строки для композитного изображения, чтобы инвертировать горизонтальный порядок
-        // Первая исходная строка (индекс 0) попадает в последнюю композитную строку (индекс N-1)
-        // Последняя исходная строка (индекс N-1) попадает в первую композитную строку (индекс 0)
-        int composite_row = (N - 1) - row;
-
-        painter.drawImage(col * img_width, composite_row * img_height, img); // Использовать composite_row для Y-координаты
+        int row = i / N_grid_dim;
+        int col = i % N_grid_dim;
+        int composite_row = (N_grid_dim - 1) - row;
+        painter.drawImage(col * img_width, composite_row * img_height, img);
     }
-
     painter.end();
 
-    // Сформировать имя выходного файла с меткой времени в конечном выходном каталоге
-    char date_buffer[80];
-    std::strftime(date_buffer, sizeof(date_buffer), "Снимок_сетки_%Y-%m-%d_%H-%M-%S.bmp", current_time);
-    std::string output_file_name = output_dir_path + "/" + date_buffer;
+    char time_str_buffer[80];
+    std::strftime(time_str_buffer, sizeof(time_str_buffer), "%Y-%m-%d_%H-%M-%S", current_time);
 
-    // Сохранить композитное изображение как BMP
-    if (compositeImage.save(QString::fromStdString(output_file_name), "BMP"))
+    // Путь сохранения теперь берется из объекта, переданного потоку
+    // Уникальное имя файла включает имя объекта
+    std::string safe_object_name = object_name_identifier;
+    std::replace_if(safe_object_name.begin(), safe_object_name.end(), [](char c)
+                    { return !std::isalnum(c) && c != '_' && c != '-'; }, '_');
+
+    std::string output_file_name = output_dir_path + "/" + safe_object_name + "_" + time_str_buffer + ".bmp";
+
+    // Убедиться, что выходной каталог объекта существует перед сохранением
+    std::error_code ec_dir;
+    std::filesystem::create_directories(output_dir_path, ec_dir);
+    if (ec_dir)
     {
-        std::cout << "Композитный скриншот сохранен: " << output_file_name << std::endl;
-        // Очистить временные файлы после успешного сохранения с помощью filesystem
-        std::error_code ec;
-        std::filesystem::remove_all(temp_dir_path, ec);
-        if (ec)
-        {
-            std::cerr << "Ошибка при очистке filesystem после успешного сохранения композита: " << ec.message() << std::endl;
-        }
-        else
-        {
-            std::cout << "Временный каталог очищен: " << temp_dir_path << std::endl;
-        }
+        std::cerr << "Ошибка создания выходного каталога для объекта " << object_name_identifier << ": " << output_dir_path << " - " << ec_dir.message() << std::endl;
+        // Продолжить очистку временной папки, даже если не удалось сохранить
+    }
+
+    bool save_success = false;
+    if (!ec_dir)
+    { // Только если удалось создать выходной каталог
+        save_success = compositeImage.save(QString::fromStdString(output_file_name), "BMP");
+    }
+
+    std::error_code ec_cleanup;
+    std::filesystem::remove_all(temp_dir_path, ec_cleanup);
+    if (ec_cleanup)
+    {
+        std::cerr << "Ошибка при очистке временного каталога '" << temp_dir_path << "' (filesystem): " << ec_cleanup.message() << std::endl;
+    }
+    else
+    {
+        std::cout << "Временный каталог '" << temp_dir_path << "' очищен." << std::endl;
+    }
+
+    if (save_success)
+    {
+        std::cout << "Композитный скриншот для объекта " << object_name_identifier << " сохранен: " << output_file_name << std::endl;
         return true;
     }
     else
     {
-        std::cerr << "Ошибка сохранения композитного скриншота: " << output_file_name << std::endl;
-        // Очистить временные файлы независимо от успешности сохранения композита, согласно запросу пользователя
-        std::error_code ec;
-        std::filesystem::remove_all(temp_dir_path, ec);
-        if (ec)
-        {
-            std::cerr << "Ошибка при очистке filesystem после неудачной попытки сохранения композита: " << ec.message() << std::endl;
-        }
-        else
-        {
-            std::cout << "Временный каталог очищен после попытки сохранения: " << temp_dir_path << std::endl;
-        }
+        std::cerr << "Ошибка сохранения композитного скриншота для объекта " << object_name_identifier << ": " << output_file_name << std::endl;
         return false;
     }
 }
@@ -217,276 +221,282 @@ class CaptureThread : public QThread
     Q_OBJECT
 
 public:
-    CaptureThread(QObject *parent = nullptr) : QThread(parent), running(true) {}
+    CaptureThread(std::vector<MapObject> objects,
+                  int interval,
+                  std::string st_time,
+                  std::string en_time,
+                  QObject *parent = nullptr)
+        : QThread(parent),
+          m_mapObjects(std::move(objects)),
+          m_capture_interval_sec(interval),
+          m_start_time_str(std::move(st_time)),
+          m_end_time_str(std::move(en_time)),
+          running(false) {}
 
-    void setDirectory(const std::string &directory) { saving_directory = directory; }
-
-    // Метод для безопасной остановки потока
     void stop()
     {
         running = false;
-        // Сигнализировать потоку проснуться, если он спит, хотя короткие задержки уже позволяют это.
-        // Если бы это была долгая блокирующая операция, потребовались бы условие ожидания или событие.
     }
 
     void run() override
     {
         running = true;
-        // Сформировать полный путь к временному каталогу внутри выбранного пользователем каталога
-        std::string temp_save_dir = saving_directory + "/" + screen_temp_directory_name;
-
-        // Убедиться, что временный каталог чист в самом начале жизни потока
-        // Использовать std::filesystem для надежного удаления и создания
-        std::error_code ec;
-        std::filesystem::remove_all(temp_save_dir, ec);
-        if (ec)
-        {
-            std::cerr << "Ошибка при начальной очистке временного каталога '" << temp_save_dir << "' с помощью filesystem: " << ec.message() << std::endl;
-        }
-        // Убедиться, что временный каталог существует перед началом цикла
-        if (!std::filesystem::exists(temp_save_dir))
-        {
-            std::filesystem::create_directory(temp_save_dir, ec);
-            if (ec)
-            {
-                std::cerr << "Ошибка создания временного каталога '" << temp_save_dir << "': " << ec.message() << std::endl;
-                // Если временный каталог не может быть создан, поток не может работать правильно
-                running = false; // Остановить поток, если создание временного каталога не удалось
-                return;          // Выйти из метода run
-            }
-        }
+        std::cout << "Поток захвата запущен." << std::endl;
 
         while (running)
         {
             std::time_t now_t = std::time(nullptr);
-            std::tm *current_time = std::localtime(&now_t);
+            std::tm *current_time_tm = std::localtime(&now_t);
 
-            // Проверить, действителен ли current_time перед использованием
-            if (!current_time)
+            if (!current_time_tm)
             {
                 std::cerr << "Ошибка получения текущего времени. Пропускаем цикл захвата." << std::endl;
-                // Подождать немного перед повторной попыткой, чтобы избежать бесконечного цикла при ошибке
-                std::this_thread::sleep_for(std::chrono::seconds(10));
+                sleepAndCheckRunning(10); // Подождать 10 секунд
                 continue;
             }
 
-            // Разобрать строки времени в целые числа для сравнения
-            // Базовая проверка на действительность формата hh:mm перед stoi
-            size_t start_colon = start_time.find(':');
-            size_t end_colon = end_time.find(':');
-            if (start_colon == std::string::npos || end_colon == std::string::npos || start_time.length() < 5 || end_time.length() < 5)
+            // Проверка времени захвата
+            if (!isWithinCaptureTimeWindow(current_time_tm))
             {
-                std::cerr << "Неверный формат времени. Пожалуйста, используйте hh:mm. Пропускаем цикл захвата." << std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(60)); // Подождать минуту перед повторной проверкой формата времени
+                // std::cout << "Вне времени захвата (" << m_start_time_str << " - " << m_end_time_str << "). Ожидаем..." << std::endl; // Слишком много логов
+                sleepAndCheckRunning(300); // Ждать 5 минут перед следующей проверкой
                 continue;
             }
 
-            int start_hour = std::stoi(start_time.substr(0, start_colon));
-            int start_minute = std::stoi(start_time.substr(start_colon + 1, 2));
-            int end_hour = std::stoi(end_time.substr(0, end_colon));
-            int end_minute = std::stoi(end_time.substr(end_colon + 1, 2));
+            std::cout << "Внутри времени захвата. Запуск обработки объектов (" << m_mapObjects.size() << " шт.)." << std::endl;
 
-            // Базовая проверка значений часа/минуты
+            for (size_t i = 0; i < m_mapObjects.size() && running; ++i)
+            {
+                const auto &mapObject = m_mapObjects[i];
+                std::cout << "Обработка объекта: " << mapObject.name << std::endl;
+
+                std::vector<std::pair<double, double>> current_object_coords;
+                generateCoordinatesForObject(mapObject, current_object_coords);
+
+                if (current_object_coords.empty())
+                {
+                    std::cerr << "Нет координат для объекта " << mapObject.name << ". Пропуск." << std::endl;
+                    continue;
+                }
+
+                // Временная папка теперь создается внутри каталога сохранения объекта
+                std::string object_temp_dir_name = screen_temp_directory_name_base + "_" + mapObject.name;
+                std::string object_temp_full_path = mapObject.save_directory + "/" + object_temp_dir_name;
+
+                std::error_code ec;
+                std::filesystem::remove_all(object_temp_full_path, ec); // Очистить перед новым пакетом
+                if (ec)
+                {
+                    std::cerr << "Ошибка при очистке временного каталога объекта " << mapObject.name << ": " << ec.message() << std::endl;
+                }
+                // Убедиться, что и каталог сохранения объекта, и временный каталог существуют
+                std::filesystem::create_directories(object_temp_full_path, ec);
+                if (ec)
+                {
+                    std::cerr << "Ошибка создания временного каталога для объекта " << mapObject.name << ": " << object_temp_full_path << " - " << ec.message() << std::endl;
+                    continue; // Пропустить этот объект
+                }
+
+                bool capture_loop_completed_for_object = true;
+                for (size_t u = 0; u < current_object_coords.size() && running; ++u)
+                {
+                    std::time_t snap_time_t = std::time(nullptr); // Обновить время для каждого снимка
+                    std::tm *snap_time_tm = std::localtime(&snap_time_t);
+                    createSnapshot(current_object_coords[u], object_temp_full_path, "Скриншот_%Y-%m-%d_%H-%M-%S", static_cast<int>(u), snap_time_tm);
+                }
+                if (!running)
+                { // Проверка после внутреннего цикла захвата
+                    capture_loop_completed_for_object = false;
+                    std::cout << "Запрошена остановка во время захвата для объекта " << mapObject.name << std::endl;
+                }
+
+                if (capture_loop_completed_for_object)
+                {
+                    // Обновить current_time_tm для имени файла объединенного изображения
+                    now_t = std::time(nullptr);
+                    current_time_tm = std::localtime(&now_t);
+                    // Передаем каталог сохранения объекта как output_dir_path
+                    combineAndCleanupScreenshots(object_temp_full_path, mapObject.save_directory, current_time_tm, mapObject.name);
+                }
+                else
+                {
+                    std::cerr << "Захват для объекта " << mapObject.name << " прерван. Очистка временных файлов." << std::endl;
+                    std::filesystem::remove_all(object_temp_full_path, ec); // Очистить частичные результаты
+                    if (ec)
+                    {
+                        std::cerr << "Ошибка при очистке частичного временного каталога объекта " << mapObject.name << ": " << ec.message() << std::endl;
+                    }
+                }
+                if (!running)
+                    break; // Выйти из цикла по объектам, если остановлено
+            } // Конец цикла по объектам
+
+            if (running)
+            { // Ждать следующий интервал, только если не остановлено
+                std::cout << "Все объекты обработаны. Ожидание следующего интервала захвата (" << m_capture_interval_sec << "с)..." << std::endl;
+                sleepAndCheckRunning(m_capture_interval_sec);
+            }
+        } // Конец while(running)
+
+        std::cout << "Поток захвата завершил выполнение." << std::endl;
+        // Финальная очистка всех возможных временных папок объектов при выходе потока (на всякий случай)
+        for (const auto &mapObject : m_mapObjects)
+        {
+            std::string object_temp_dir_name = screen_temp_directory_name_base + "_" + mapObject.name;
+            std::string object_temp_full_path = mapObject.save_directory + "/" + object_temp_dir_name; // Путь зависит от объекта
+            std::error_code ec_final;
+            std::filesystem::remove_all(object_temp_full_path, ec_final);
+            if (ec_final)
+            {
+                std::cerr << "Ошибка при финальной очистке временного каталога '" << object_temp_full_path << "': " << ec_final.message() << std::endl;
+            }
+        }
+    }
+
+private:
+    std::vector<MapObject> m_mapObjects;
+    int m_capture_interval_sec;
+    std::string m_start_time_str;
+    std::string m_end_time_str;
+    bool running;
+
+    void sleepAndCheckRunning(int seconds)
+    {
+        for (int i = 0; i < seconds * 10 && running; ++i)
+        { // Проверять каждые 100мс
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
+    bool isWithinCaptureTimeWindow(const std::tm *current_time_tm)
+    {
+        if (!current_time_tm)
+            return false;
+
+        size_t start_colon = m_start_time_str.find(':');
+        size_t end_colon = m_end_time_str.find(':');
+
+        if (start_colon == std::string::npos || end_colon == std::string::npos || m_start_time_str.length() < 4 || m_end_time_str.length() < 4)
+        {
+            std::cerr << "Неверный формат времени в настройках. Используйте hh:mm." << std::endl;
+            return false; // Не продолжать, если формат времени некорректен
+        }
+        try
+        {
+            int start_hour = std::stoi(m_start_time_str.substr(0, start_colon));
+            int start_minute = std::stoi(m_start_time_str.substr(start_colon + 1));
+            int end_hour = std::stoi(m_end_time_str.substr(0, end_colon));
+            int end_minute = std::stoi(m_end_time_str.substr(end_colon + 1));
+
             if (start_hour < 0 || start_hour > 23 || start_minute < 0 || start_minute > 59 ||
                 end_hour < 0 || end_hour > 23 || end_minute < 0 || end_minute > 59)
             {
-                std::cerr << "Неверное значение часа или минуты в диапазоне времени. Пропускаем цикл захвата." << std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(60)); // Подождать минуту
-                continue;
+                std::cerr << "Неверное значение часа или минуты в диапазоне времени." << std::endl;
+                return false;
             }
 
-            // Более точная проверка времени, включая минуты
-            bool is_within_time = false;
-            int current_total_minutes = current_time->tm_hour * 60 + current_time->tm_min;
+            int current_total_minutes = current_time_tm->tm_hour * 60 + current_time_tm->tm_min;
             int start_total_minutes = start_hour * 60 + start_minute;
             int end_total_minutes = end_hour * 60 + end_minute;
 
             if (start_total_minutes <= end_total_minutes)
-            { // Обычный диапазон времени (например, с 07:00 до 23:00)
-                if (current_total_minutes >= start_total_minutes && current_total_minutes < end_total_minutes)
-                {
-                    is_within_time = true;
-                }
+            {
+                return current_total_minutes >= start_total_minutes && current_total_minutes < end_total_minutes;
             }
             else
-            { // Диапазон времени с переходом через полночь (например, с 22:00 до 06:00)
-                if (current_total_minutes >= start_total_minutes || current_total_minutes < end_total_minutes)
-                {
-                    is_within_time = true;
-                }
+            { // Диапазон времени с переходом через полночь
+                return current_total_minutes >= start_total_minutes || current_total_minutes < end_total_minutes;
             }
-
-            if (!is_within_time)
-            {
-                // Подождать до времени начала или проверить снова через короткий интервал
-                auto start_sleep_chrono = std::chrono::high_resolution_clock::now();
-                // std::cout << "Вне времени захвата (" << start_time << " - " << end_time << "). Ожидаем..." << std::endl; // Слишком много сообщений
-                // Подождать короткий интервал (например, 5 минут) перед повторной проверкой времени
-                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep_chrono).count() < 300)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Короткие задержки позволяют быстро остановить
-                }
-                continue; // Проверить время снова после задержки
-            }
-
-            // Внутри диапазона времени захвата
-            std::cout << "Внутри времени захвата (" << start_time << " - " << end_time << "). Запуск пакета захвата." << std::endl;
-
-            if (coordinat.empty())
-            {
-                std::cerr << "Список координат пуст. Захват невозможен." << std::endl;
-                // Ждать интервал захвата, даже если нет координат, чтобы избежать бесконечного цикла
-                auto start_sleep_chrono = std::chrono::high_resolution_clock::now();
-                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep_chrono).count() < capture_interval)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-                continue;
-            }
-
-            // Очистить временный каталог перед началом нового пакета захватов
-            std::filesystem::remove_all(temp_save_dir, ec);
-            if (ec)
-            {
-                std::cerr << "Ошибка при очистке временного каталога перед новым пакетом '" << temp_save_dir << "' с помощью filesystem: " << ec.message() << std::endl;
-            }
-            // Убедиться, что он существует для этого пакета захвата
-            if (!std::filesystem::exists(temp_save_dir))
-            {
-                std::filesystem::create_directory(temp_save_dir, ec);
-                if (ec)
-                {
-                    std::cerr << "Ошибка создания временного каталога '" << temp_save_dir << "' перед пакетом: " << ec.message() << std::endl;
-                    // Невозможно продолжить захват, если временный каталог не удалось создать
-                    auto start_sleep_chrono = std::chrono::high_resolution_clock::now();
-                    while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep_chrono).count() < capture_interval)
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    continue; // Попробовать снова в следующем интервале
-                }
-            }
-
-            // Захватить все отдельные скриншоты во временный каталог
-            bool capture_loop_completed = true; // Флаг для проверки, полностью ли выполнился цикл
-            std::cout << "Захват отдельных скриншотов в каталог: " << temp_save_dir << std::endl;
-            for (size_t u = 0; u < coordinat.size(); ++u)
-            {
-                if (!running)
-                {
-                    std::cout << "Запрошена остановка во время цикла захвата отдельных скриншотов." << std::endl;
-                    capture_loop_completed = false; // Цикл был прерван
-                    break;                          // Выйти из цикла захвата
-                }
-                // Получить текущее время для имени файла этого конкретного снимка
-                std::time_t now_t_inner = std::time(nullptr);
-                std::tm *current_time_inner = std::localtime(&now_t_inner);
-                createSnapshot(coordinat[u], temp_save_dir, "Скриншот_%Y-%m-%d_%H-%M-%S", static_cast<int>(u), current_time_inner);
-            }
-
-            // --- Обработка после захвата отдельных скриншотов ---
-            if (capture_loop_completed)
-            {
-                // Если цикл захвата завершился без остановки, объединить изображения
-                std::cout << "Пакет захвата завершен. Объединение скриншотов..." << std::endl;
-                // Использовать метку времени из конца пакета (текущее время) для имени объединенного файла
-                std::time_t now_t_batch = std::time(nullptr);
-                std::tm *current_time_batch = std::localtime(&now_t_batch);
-                combineAndCleanupScreenshots(temp_save_dir, saving_directory, current_time_batch);
-                std::cout << "Объединение завершено." << std::endl;
-            }
-            else
-            {
-                // Если цикл был прерван запросом на остановку, немедленно очистить частичные результаты
-                std::cerr << "Пакет захвата прерван. Очистка частичных временных файлов." << std::endl;
-                std::error_code ec_partial;
-                std::filesystem::remove_all(temp_save_dir, ec_partial);
-                if (ec_partial)
-                {
-                    std::cerr << "Ошибка при очистке частичного временного каталога '" << temp_save_dir << "' с помощью filesystem: " << ec_partial.message() << std::endl;
-                }
-                else
-                {
-                    std::cout << "Частичный временный каталог очищен: " << temp_save_dir << std::endl;
-                }
-            }
-            // --- Конец обработки после захвата отдельных скриншотов ---
-
-            // Ждать следующий интервал захвата. Ждать только если поток все еще запущен и цикл завершен.
-            // Если цикл был прерван (capture_loop_completed == false), поток должен немедленно выйти из внешнего цикла.
-            if (running && capture_loop_completed)
-            {
-                auto start_sleep_chrono = std::chrono::high_resolution_clock::now();
-                std::cout << "Ожидание следующего интервала захвата (" << capture_interval << "с)..." << std::endl;
-                while (running && std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_sleep_chrono).count() < capture_interval)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Короткие задержки позволяют быстро остановить
-                }
-                if (!running)
-                {
-                    std::cout << "Запрошена остановка во время ожидания интервала." << std::endl;
-                }
-            }
-            else if (!running)
-            {
-                // Если остановлено, выйти из внешнего цикла while немедленно после возможной частичной очистки
-                std::cout << "Выход из цикла run из-за запроса на остановку после прерванного захвата." << std::endl;
-            } // Если running true, но capture_loop_completed false, что-то пошло не так, но это не запрос на остановку?
-              // Этот случай, в идеале, не должен происходить с текущей логикой.
-
-        } // Конец цикла while(running)
-
-        std::cout << "Поток захвата завершил выполнение." << std::endl;
-        // Окончательная очистка временного каталога при выходе потока
-        std::string final_temp_dir_path_exit = saving_directory + "/" + screen_temp_directory_name;
-        std::error_code ec_final;
-        std::filesystem::remove_all(final_temp_dir_path_exit, ec_final);
-        if (ec_final)
-        {
-            std::cerr << "Ошибка при окончательной очистке временного каталога '" << final_temp_dir_path_exit << "' при выходе потока с помощью filesystem: " << ec_final.message() << std::endl;
         }
-        else
+        catch (const std::exception &e)
         {
-            std::cout << "Окончательный временный каталог очищен при выходе потока: " << final_temp_dir_path_exit << std::endl;
+            std::cerr << "Ошибка парсинга времени: " << e.what() << std::endl;
+            return false;
         }
-    } // Конец run()
+        return false;
+    }
 
-private:
-    std::string saving_directory;
-    bool running; // Флаг для управления выполнением потока
-
-    // Метод для создания отдельного снимка через Yandex Static Maps API
-    void createSnapshot(std::pair<double, double> url, const std::string &directory, const std::string &format, int index, std::tm *current_time)
+    void generateCoordinatesForObject(const MapObject &obj, std::vector<std::pair<double, double>> &out_coords)
     {
-        char buffer[80];
-        // Использование gmtime вместо localtime для метки времени UTC может быть более согласованным, но localtime подходит для локальных имен файлов
-        std::strftime(buffer, sizeof(buffer), format.c_str(), current_time);
-        // Сохранить в указанный каталог (который является временным каталогом в run())
-        std::string file_name = directory + "/" + buffer + "_" + std::to_string(index) + ".png";
+        out_coords.clear();
+        double lat0 = obj.latitude_center;
+        double lon0 = obj.longitude_center;
+        double r_km = static_cast<double>(obj.radius_km);
 
-        // Проверить, существует ли целевой каталог (теперь должен быть гарантирован методом run())
+        const double deg_per_km_at_equator = 0.01; // Приблизительно градусов на км
+        const double step_deg_y = 0.0137;          // Шаг по широте (Y)
+        const double step_deg_x = 0.0193;          // Шаг по долготе (X)
+
+        double span_from_center_lat_deg = r_km * deg_per_km_at_equator;
+        double cos_lat0 = std::cos(lat0 * M_PI / 180.0);
+        if (std::abs(cos_lat0) < std::numeric_limits<double>::epsilon())
+        {
+            cos_lat0 = std::numeric_limits<double>::epsilon();
+        }
+        double span_from_center_lon_deg = r_km * deg_per_km_at_equator / cos_lat0;
+
+        int num_steps_from_center_lat = static_cast<int>(std::floor(span_from_center_lat_deg / step_deg_y));
+        int num_steps_from_center_lon = static_cast<int>(std::floor(span_from_center_lon_deg / step_deg_x));
+
+        int N_grid = std::max(1, 2 * std::max(num_steps_from_center_lat, num_steps_from_center_lon) + 1);
+        if (N_grid == 0)
+            N_grid = 1; // Минимум 1x1 сетка
+
+        double start_lat = lat0 - (N_grid - 1) / 2.0 * step_deg_y - step_deg_y / 2.0; // Скорректировано для bbox
+        double start_lon = lon0 - (N_grid - 1) / 2.0 * step_deg_x - step_deg_x / 2.0; // Скорректировано для bbox
+
+        std::cout << "Для объекта '" << obj.name << "': Центр(" << lat0 << ", " << lon0 << "), R=" << r_km
+                  << "км. Сетка " << N_grid << "x" << N_grid << "." << std::endl;
+
+        for (int yy = 0; yy < N_grid; ++yy)
+        {
+            for (int xx = 0; xx < N_grid; ++xx)
+            {
+                // Координаты левого нижнего угла тайла
+                double current_tile_lat_bottom = start_lat + yy * step_deg_y;
+                double current_tile_lon_left = start_lon + xx * step_deg_x;
+                // Для bbox передаем {lat_bottom, lon_left}
+                out_coords.push_back({current_tile_lat_bottom, current_tile_lon_left});
+            }
+        }
+    }
+
+    void createSnapshot(std::pair<double, double> bottom_left_coord, const std::string &directory, const std::string &format, int index, std::tm *current_time_tm)
+    {
+        if (!running)
+            return;
+
+        char filename_time_buffer[80];
+        std::strftime(filename_time_buffer, sizeof(filename_time_buffer), format.c_str(), current_time_tm);
+        std::string file_name = directory + "/" + filename_time_buffer + "_" + std::to_string(index) + ".png";
+
         if (!std::filesystem::exists(directory))
         {
             std::cerr << "Целевой каталог для снимка не существует: " << directory << ". Пропускаем снимок." << std::endl;
             return;
         }
 
-        // Убедиться, что locale установлено в "C" для стандартного форматирования десятичной точки (точка)
-        // Это критически важно для std::to_string, используемого ниже, хотя snprintf был безопаснее.
-        // Давайте вернем snprintf, который не зависит от locale.
-        //  std::locale::global(std::locale("C"));
-        // std::cout << url.first << " " << url.second << std::endl;
-        // std::cout << url.first + 0.02 << " " << url.second + 0.02 << std::endl;
+        double lat_bottom = bottom_left_coord.first;
+        double lon_left = bottom_left_coord.second;
 
-        // std::string api_url = "https://static-maps.yandex.ru/1.x/?ll=" +
-        //                       std::to_string(url.second) + "," + std::to_string(url.first) +
-        //                       "&spn=0.015,0.015&size=450,450&l=map,trf";
+        // Определяем размер тайла (примерно 0.01 градуса для Яндекса с spn=0.015,0.015 и size=450,450)
+        // Bbox-у Яндекса нужны {lon_left,lat_bottom}~{lon_right,lat_top}
+        // Используем фиксированный размер тайла, соответствующий шагам сетки
+        const double tile_height_deg = 0.01;//37; // Это наш step_deg_y
+        const double tile_width_deg = 0.01;//93;  // Это наш step_deg_x
 
-        std::string api_url = "https://static-maps.yandex.ru/1.x/?bbox=" +
-                              std::to_string(url.second) + "," + std::to_string(url.first) +
-                              "~" + std::to_string(url.second + 0.01) + "," + std::to_string(url.first + 0.01) +
-                              "&size=450,450&l=map,trf";
-        // std::cout << "Request URL: " << api_url << std::endl; // Для отладки
+        double lon_right = lon_left + tile_width_deg;
+        double lat_top = lat_bottom + tile_height_deg;
+
+        std::ostringstream oss_api_url;
+        oss_api_url.imbue(std::locale("C")); // Для точки в качестве десятичного разделителя
+        oss_api_url << "https://static-maps.yandex.ru/1.x/?bbox="
+                    << lon_left << "," << lat_bottom << "~" << lon_right << "," << lat_top
+                    << "&size=450,450&l=map,trf"; // trf - пробки
+                                     
+        std::string api_url = oss_api_url.str();
+
+        // std::cout << "Запрос URL: " << api_url << std::endl; // Для отладки
 
         CURL *curl = curl_easy_init();
         if (curl)
@@ -496,45 +506,37 @@ private:
             {
                 curl_easy_setopt(curl, CURLOPT_URL, api_url.c_str());
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
-                curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
-                curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L); // Сбой при HTTP ошибках (>= 400)
-                curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);     // Установить в 1L для подробного вывода CURL
-
+                curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+                // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); // Для отладки CURL
                 CURLcode res = curl_easy_perform(curl);
                 long http_code = 0;
-                curl_easy_getinfo(curl, CURLINFO_HTTP_CODE, &http_code); // Получить код статуса HTTP
-
-                fclose(file); // Закрыть файл независимо от результата CURL
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+                fclose(file);
 
                 if (res == CURLE_OK && http_code >= 200 && http_code < 300)
                 {
-                    // Проверить, был ли файл действительно загружен и не пуст
                     std::ifstream ifs(file_name, std::ios::binary | std::ios::ate);
-                    if (ifs.is_open() && ifs.tellg() > 0)
+                    if (!ifs.is_open() || ifs.tellg() == 0)
                     {
-                        // Файл действителен и не пуст
-                        // std::cout << "Снимок успешно сохранен: " << file_name << std::endl; // Слишком много сообщений
-                        // emit snapshotDone(QString::fromStdString(file_name)); // Можно испустить сигнал, если нужно в GUI
+                        std::cerr << "Ошибка: Загруженный файл пуст или не удалось проверить: " << file_name << std::endl;
+                        std::filesystem::remove(file_name);
                     }
                     else
                     {
-                        std::cerr << "Ошибка: Загруженный файл пуст или не удалось повторно открыть -> " << file_name << std::endl;
-                        // Удалить пустой или недействительный файл
-                        std::filesystem::remove(file_name);
+                        // std::cout << "Снимок сохранен: " << file_name << std::endl; // Слишком много логов
                     }
                 }
                 else
                 {
-                    std::cerr << "Ошибка CURL (код: " << res << ", HTTP: " << http_code << ") во время загрузки с " << api_url << ": " << curl_easy_strerror(res) << std::endl;
-                    // Удалить файл, если произошла ошибка CURL или HTTP
-                    std::filesystem::remove(file_name);
+                    std::cerr << "Ошибка CURL (код: " << res << ", HTTP: " << http_code << ") для URL " << api_url << ": " << curl_easy_strerror(res) << std::endl;
+                    std::filesystem::remove(file_name); // Удалить файл при ошибке
                 }
             }
             else
             {
                 std::cerr << "Ошибка открытия файла для записи: " << file_name << " (errno: " << errno << ")" << std::endl;
             }
-            curl_easy_cleanup(curl); // Очистить easy handle CURL
+            curl_easy_cleanup(curl);
         }
         else
         {
@@ -549,305 +551,366 @@ class SnapshotApp : public QWidget
     Q_OBJECT
 
 public:
-    SnapshotApp(QWidget *parent = nullptr) : QWidget(parent)
+    SnapshotApp(QWidget *parent = nullptr) : QWidget(parent), captureThread(nullptr)
     {
-        setWindowTitle("Снимки карты");
+        setWindowTitle("Снимки карты по объектам");
+        QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
-        QVBoxLayout *layout = new QVBoxLayout(this);
+        // --- Панель добавления объекта ---
+        QGroupBox *addObjectGroup = new QGroupBox("Добавить объект на карту");
+        QVBoxLayout *objectGroupLayout = new QVBoxLayout();
 
-        // Установка времени
-        startTimeEdit = new QTimeEdit(QTime::fromString(QString::fromStdString(start_time), "hh:mm"));
-        startTimeEdit->setDisplayFormat("hh:mm"); // Убедиться в единообразном формате
-        layout->addWidget(new QLabel("Время начала (hh:mm):"));
-        layout->addWidget(startTimeEdit);
+        objectNameEdit = new QLineEdit("Объект1");
+        objectGroupLayout->addWidget(new QLabel("Имя объекта (уникальное):"));
+        objectGroupLayout->addWidget(objectNameEdit);
 
-        endTimeEdit = new QTimeEdit(QTime::fromString(QString::fromStdString(end_time), "hh:mm"));
-        endTimeEdit->setDisplayFormat("hh:mm"); // Убедиться в единообразном формате
-        layout->addWidget(new QLabel("Время окончания (hh:mm):"));
-        layout->addWidget(endTimeEdit);
+        latEdit = new QLineEdit("45.07");
+        QDoubleValidator *latValidator = new QDoubleValidator(-90.0, 90.0, 8, this);
+        latValidator->setLocale(QLocale::c());
+        latEdit->setValidator(latValidator);
+        objectGroupLayout->addWidget(new QLabel("Широта центра:"));
+        objectGroupLayout->addWidget(latEdit);
 
-        intervalEdit = new QLineEdit(QString::number(capture_interval));
-        intervalEdit->setValidator(new QIntValidator(1, 86400, this)); // Интервал от 1 сек до 24 часов
-        layout->addWidget(new QLabel("Интервал съемки (с):"));
-        layout->addWidget(intervalEdit);
+        lonEdit = new QLineEdit("39.0");
+        QDoubleValidator *lonValidator = new QDoubleValidator(-180.0, 180.0, 8, this);
+        lonValidator->setLocale(QLocale::c());
+        lonEdit->setValidator(lonValidator);
+        objectGroupLayout->addWidget(new QLabel("Долгота центра:"));
+        objectGroupLayout->addWidget(lonEdit);
 
-        latEdit = new QLineEdit(QString::number(0.0));
-        // latEdit->setValidator(new QDoubleValidator(-90.0, 90.0, 8, this)); // Валидатор широты-
-        QDoubleValidator *validatorlat = new QDoubleValidator(-90.0, 90.0, 8, this);
-        validatorlat->setLocale(QLocale::c()); // Устанавливаем локаль
-        latEdit->setValidator(validatorlat);
-        layout->addWidget(new QLabel("Широта центра:"));
-        layout->addWidget(latEdit);
+        radiusEdit = new QLineEdit("5"); // 5 км по умолчанию
+        radiusEdit->setValidator(new QIntValidator(1, 1000, this));
+        objectGroupLayout->addWidget(new QLabel("Радиус съемки объекта (км):"));
+        objectGroupLayout->addWidget(radiusEdit);
 
-        lonEdit = new QLineEdit(QString::number(0.0));
-      //  lonEdit->setValidator(new QDoubleValidator(-180.0, 180.0, 8, this)); // Валидатор долготы
-       QDoubleValidator *validatorlon = new QDoubleValidator(-180.0, 180.0, 8, this);
-        validatorlon->setLocale(QLocale::c()); // Устанавливаем локаль
-        lonEdit->setValidator(validatorlon);
-        layout->addWidget(new QLabel("Долгота центра:"));
-        layout->addWidget(lonEdit);
+        // Поле для указания пути сохранения для ЭТОГО объекта
+        objectSaveDirEdit = new QLineEdit("./screenshots_output/Объект1"); // Путь по умолчанию
+        objectGroupLayout->addWidget(new QLabel("Путь для сохранения снимков объекта:"));
+        QHBoxLayout *objectDirLayout = new QHBoxLayout();
+        objectDirLayout->addWidget(objectSaveDirEdit);
+        QPushButton *browseObjectDirButton = new QPushButton("Обзор...");
+        // Подключаем к слоту, который будет обновлять только это поле
+        connect(browseObjectDirButton, &QPushButton::clicked, this, &SnapshotApp::browseObjectDirectory);
+        objectDirLayout->addSpacing(5);
+        objectDirLayout->addWidget(browseObjectDirButton);
+        objectGroupLayout->addLayout(objectDirLayout);
 
-        radiusEdit = new QLineEdit(QString::number(radius));
-        radiusEdit->setValidator(new QIntValidator(0, 1000, this)); // Валидатор радиуса (например, до 1000 км)
-        layout->addWidget(new QLabel("Радиус съемки (км):"));
-        layout->addWidget(radiusEdit);
+        addMapObjectButton = new QPushButton("Добавить объект");
+        connect(addMapObjectButton, &QPushButton::clicked, this, &SnapshotApp::onAddMapObject);
+        objectGroupLayout->addWidget(addMapObjectButton);
 
-        // Удалено: Поле для количества точек countRowEdit
+        addObjectGroup->setLayout(objectGroupLayout);
+        mainLayout->addWidget(addObjectGroup);
 
-        // Поле для указания пути сохранения окончательных снимков
-        dirEdit = new QLineEdit(QString::fromStdString(screenshot_directory));
-        layout->addWidget(new QLabel("Путь для сохранения окончательных снимков:"));
-        layout->addWidget(dirEdit);
+        // --- Список объектов ---
+        mapObjectsListWidget = new QListWidget();
+        mainLayout->addWidget(new QLabel("Список объектов для съемки:"));
+        mainLayout->addWidget(mapObjectsListWidget);
+        removeMapObjectButton = new QPushButton("Удалить выбранный объект");
+        connect(removeMapObjectButton, &QPushButton::clicked, this, &SnapshotApp::onRemoveMapObject);
+        mainLayout->addWidget(removeMapObjectButton);
 
-        // Кнопка для выбора пути
-        QPushButton *browseButton = new QPushButton("Обзор...");
-        layout->addWidget(browseButton);
-        connect(browseButton, &QPushButton::clicked, this, &SnapshotApp::browseDirectory);
+        // --- Общие настройки (без пути сохранения) ---
+        QGroupBox *settingsGroup = new QGroupBox("Общие настройки съемки");
+        QVBoxLayout *settingsLayout = new QVBoxLayout();
 
-        // Кнопка для старта
-        QPushButton *startButton = new QPushButton("Начать съемку");
-        layout->addWidget(startButton);
+        startTimeEdit = new QTimeEdit(QTime::fromString("07:00", "hh:mm"));
+        startTimeEdit->setDisplayFormat("hh:mm");
+        settingsLayout->addWidget(new QLabel("Время начала (hh:mm):"));
+        settingsLayout->addWidget(startTimeEdit);
+
+        endTimeEdit = new QTimeEdit(QTime::fromString("23:00", "hh:mm"));
+        endTimeEdit->setDisplayFormat("hh:mm");
+        settingsLayout->addWidget(new QLabel("Время окончания (hh:mm):"));
+        settingsLayout->addWidget(endTimeEdit);
+
+        intervalEdit = new QLineEdit("3600");                           // 1 час
+        intervalEdit->setValidator(new QIntValidator(60, 86400, this)); // от 1 мин до 24 часов
+        settingsLayout->addWidget(new QLabel("Интервал съемки (с):"));
+        settingsLayout->addWidget(intervalEdit);
+
+        settingsGroup->setLayout(settingsLayout);
+        mainLayout->addWidget(settingsGroup);
+
+        // --- Кнопки управления ---
+        QHBoxLayout *controlButtonsLayout = new QHBoxLayout();
+        startButton = new QPushButton("Начать съемку");
         connect(startButton, &QPushButton::clicked, this, &SnapshotApp::startCapture);
+        controlButtonsLayout->addWidget(startButton);
 
-        // Кнопка для остановки
-        QPushButton *stopButton = new QPushButton("Остановить съемку");
-        layout->addWidget(stopButton);
+        stopButton = new QPushButton("Остановить съемку");
         connect(stopButton, &QPushButton::clicked, this, &SnapshotApp::stopCapture);
+        controlButtonsLayout->addWidget(stopButton);
+        mainLayout->addLayout(controlButtonsLayout);
 
-        // CaptureThread создается при запуске захвата
-        captureThread = nullptr;
+        setLayout(mainLayout);
 
-        // Инициализируем библиотеку CURL
+        // Обновление пути сохранения объекта при изменении имени
+        connect(objectNameEdit, &QLineEdit::textChanged, this, &SnapshotApp::updateObjectSaveDir);
+
         curl_global_init(CURL_GLOBAL_DEFAULT);
     }
 
     ~SnapshotApp()
     {
-        // Убедиться, что поток остановлен и удален при выходе из приложения
+        stopCapture(); // Остановить поток, если он работает
         if (captureThread)
         {
-            if (captureThread->isRunning())
+            captureThread->wait(5000); // Ждать завершения
+            delete captureThread;      // Удалить после wait
+            captureThread = nullptr;
+        }
+        curl_global_cleanup();
+    }
+
+private slots:
+    void onAddMapObject()
+    {
+        bool ok_lat, ok_lon, ok_radius;
+        QString name_str = objectNameEdit->text().trimmed();
+        double lat = latEdit->text().toDouble(&ok_lat);
+        double lon = lonEdit->text().toDouble(&ok_lon);
+        int radius_val = radiusEdit->text().toInt(&ok_radius);
+        QString save_dir_str = objectSaveDirEdit->text().trimmed();
+
+        if (name_str.isEmpty())
+        {
+            QMessageBox::warning(this, "Ошибка", "Имя объекта не может быть пустым.");
+            return;
+        }
+        // Проверка уникальности имени
+        for (const auto &item : m_mapObjectList)
+        {
+            if (item.name == name_str.toStdString())
             {
-                captureThread->stop();     // Сигнализировать потоку остановиться
-                captureThread->wait(5000); // Ждать до 5 секунд завершения потока
-                if (captureThread->isRunning())
-                {
-                    std::cerr << "Предупреждение: Поток захвата не завершился корректно." << std::endl;
-                    // Можно рассмотреть возможность принудительного завершения, если wait не удался, но обычно wait предпочтительнее.
-                }
+                QMessageBox::warning(this, "Ошибка", "Объект с таким именем уже существует.");
+                return;
             }
-            // deleteLater() подключен к finished(), но явное удаление также безопасно здесь, если поток не запущен.
-            // Если он запущен и wait не удался, deleteLater может быть рискованным.
-            // Соединение сигнала finished() обычно достаточно для очистки, когда поток завершается.
         }
 
-        // Очищаем библиотеку CURL
-        curl_global_cleanup();
-
-        // Очистить временный каталог при выходе из приложения
-        // Поток очищает его при выходе, но это подстраховка.
-        std::string final_temp_dir_path = screenshot_directory + "/" + screen_temp_directory_name;
-        std::error_code ec;
-        std::filesystem::remove_all(final_temp_dir_path, ec);
-        if (ec)
+        if (!ok_lat || !ok_lon || !ok_radius || radius_val <= 0)
         {
-            std::cerr << "Ошибка при окончательной очистке временного каталога '" << final_temp_dir_path << "' при выходе приложения с помощью filesystem: " << ec.message() << std::endl;
+            QMessageBox::warning(this, "Ошибка", "Неверные параметры для объекта (широта, долгота или радиус).");
+            return;
+        }
+        if (save_dir_str.isEmpty())
+        {
+            QMessageBox::warning(this, "Ошибка", "Путь для сохранения объекта не может быть пустым.");
+            return;
+        }
+
+        MapObject newObj(lat, lon, radius_val, name_str.toStdString(), save_dir_str.toStdString());
+        m_mapObjectList.push_back(newObj);
+        mapObjectsListWidget->addItem(newObj.getDisplayText());
+
+        // Подготовка полей для следующего объекта
+        int next_obj_num = 1;
+        if (name_str.startsWith("Объект") && name_str.mid(6).toInt() > 0)
+        {
+            next_obj_num = name_str.mid(6).toInt() + 1;
         }
         else
         {
-            // std::cout << "Окончательный временный каталог очищен при выходе приложения: " << final_temp_dir_path << std::endl; // Слишком много сообщений при выходе
+            next_obj_num = m_mapObjectList.size() + 1;
+        }
+        objectNameEdit->setText("Объект" + QString::number(next_obj_num));
+        // Обновляем путь сохранения для нового имени
+        updateObjectSaveDir(objectNameEdit->text());
+        // Очистить другие поля или установить значения по умолчанию
+        latEdit->setText("0.0"); // Или другие дефолтные значения
+        lonEdit->setText("0.0");
+        radiusEdit->setText("5");
+
+        std::cout << "Добавлен объект: " << newObj.name << " в каталог " << newObj.save_directory << std::endl;
+    }
+
+    void onRemoveMapObject()
+    {
+        int currentRow = mapObjectsListWidget->currentRow();
+        if (currentRow >= 0 && currentRow < static_cast<int>(m_mapObjectList.size()))
+        {
+            std::cout << "Удаление объекта: " << m_mapObjectList[currentRow].name << std::endl;
+            m_mapObjectList.erase(m_mapObjectList.begin() + currentRow);
+            delete mapObjectsListWidget->takeItem(currentRow); // Удалить из GUI
+            std::cout << "Удален объект с индексом " << currentRow << std::endl;
+        }
+        else
+        {
+            QMessageBox::information(this, "Информация", "Выберите объект для удаления.");
         }
     }
 
-public slots:
     void startCapture()
     {
-        // Проверить, запущен ли уже поток
         if (captureThread && captureThread->isRunning())
         {
-            QMessageBox::warning(this, "Предупреждение", "Захват уже запущен. Остановите его, прежде чем начать новый.");
+            QMessageBox::warning(this, "Предупреждение", "Съемка уже запущена.");
             return;
         }
 
-        // Получить данные из GUI
-        start_time = startTimeEdit->time().toString("hh:mm").toStdString();
-        end_time = endTimeEdit->time().toString("hh:mm").toStdString();
-
-        bool ok_interval, ok_radius, ok_lat, ok_lon;
-        capture_interval = intervalEdit->text().toInt(&ok_interval);
-        radius = radiusEdit->text().toInt(&ok_radius);
-        double center_lat = latEdit->text().toDouble(&ok_lat);
-        double center_lon = lonEdit->text().toDouble(&ok_lon);
-
-        // Проверить введенные значения
-        if (!ok_interval || capture_interval <= 0)
+        if (m_mapObjectList.empty())
         {
-            QMessageBox::critical(this, "Ошибка", "Неверное значение интервала съемки.");
-            return;
-        }
-        if (!ok_radius || radius < 0)
-        {
-            QMessageBox::critical(this, "Ошибка", "Неверное значение радиуса съемки.");
-            return;
-        }
-        if (!ok_lat || center_lat < -90.0 || center_lat > 90.0)
-        {
-            QMessageBox::critical(this, "Ошибка", "Неверное значение широты центра.");
-            return;
-        }
-        if (!ok_lon || center_lon < -180.0 || center_lon > 180.0)
-        {
-            QMessageBox::critical(this, "Ошибка", "Неверное значение долготы центра.");
+            QMessageBox::warning(this, "Предупреждение", "Список объектов для съемки пуст. Добавьте хотя бы один объект.");
             return;
         }
 
-        screenshot_directory = dirEdit->text().toStdString();
+        bool ok_interval;
+        std::string current_start_time = startTimeEdit->time().toString("hh:mm").toStdString();
+        std::string current_end_time = endTimeEdit->time().toString("hh:mm").toStdString();
+        int current_capture_interval = intervalEdit->text().toInt(&ok_interval);
 
-        // Проверить, существует ли конечный выходной каталог
-        if (!std::filesystem::exists(screenshot_directory))
-        {
-            QMessageBox::critical(this, "Ошибка", "Указанный каталог для сохранения окончательных снимков не существует.");
+        if (!ok_interval || current_capture_interval < 60)
+        { // Минимальный интервал 60с
+            QMessageBox::critical(this, "Ошибка", "Неверное значение интервала съемки (минимум 60 секунд).");
             return;
         }
 
-        // Установить центральные координаты
-        std::pair<double, double> current_coordinat_centr = {center_lat, center_lon};
-
-        // Очистить предыдущий список координат
-        coordinat.clear();
-
-        // --- Генерация координат сетки на основе центра и радиуса (1 км примерно 0.01 градуса на экваторе) ---
-        double lat0 = current_coordinat_centr.first;
-        double lon0 = current_coordinat_centr.second;
-        double r_km = static_cast<double>(radius); // Радиус в километрах
-
-        // Правило: 1 км примерно равен 0.01 градуса широты.
-        // Градусы долготы зависят от широты (cos(lat)).
-        // Используется фиксированный шаг 0.02 градуса между точками сетки.
-        const double deg_per_km_at_equator = 0.01; // Примерно градусов на км для широты/долготы на экваторе
-        const double step_deg_x = 0.0193;          // Фиксированный шаг сетки в градусах
-        const double step_deg_y = 0.0137;
-
-        // Вычислить общий диапазон в градусах, необходимый для покрытия радиуса R с шагом step_deg
-        // Общий диапазон - от центра - R_deg до центра + R_deg
-        double span_from_center_lat_deg = r_km * deg_per_km_at_equator;
-        // Для долготы скорректировать эквивалент градуса на основе широты
-        double cos_lat0 = std::cos(lat0 * M_PI / 180.0);
-        // Избегать деления на ноль или близкое к нулю на полюсах
-        if (std::abs(cos_lat0) < std::numeric_limits<double>::epsilon())
+        // Проверка путей сохранения объектов перед запуском
+        for (const auto &obj : m_mapObjectList)
         {
-            cos_lat0 = std::numeric_limits<double>::epsilon(); // Использовать очень маленькое число вместо 0
-        }
-        double span_from_center_lon_deg = r_km * deg_per_km_at_equator / cos_lat0;
-
-        // Вычислить количество шагов (интервалов step_deg) от центра до края
-        // Это определяет, сколько точек нужно на *одной стороне* от центра, включая центр.
-        int num_steps_from_center_lat = static_cast<int>(std::floor(span_from_center_lat_deg / step_deg_y));
-        int num_steps_from_center_lon = static_cast<int>(std::floor(span_from_center_lon_deg / step_deg_x));
-
-        // Общее количество точек вдоль каждой оси (включая центральную точку)
-        // N = (шаги влево) + 1 (центр) + (шаги вправо)
-        // Поскольку сетка N x N, N должно быть одинаковым для обоих измерений.
-        // Берем максимальное количество шагов, чтобы убедиться, что радиус покрыт в обоих направлениях.
-        // Количество точек вдоль одной оси будет 2 * max_steps + 1.
-        int N = std::max(1, 2 * std::max(num_steps_from_center_lat, num_steps_from_center_lon) + 1);
-
-        // Вычислить начальную координату сетки (левый нижний угол)
-        // Сдвиг от центра на (N-1)/2 шагов влево и вниз.
-        double start_lat = lat0 - (N - 1) / 2.0 * step_deg_y - step_deg_y / 2;
-        double start_lon = lon0 - (N - 1) / 2.0 * step_deg_x - step_deg_x / 2;
-
-        // Генерация точек сетки
-        for (int yy = 0; yy < N; ++yy)
-        {
-            for (int xx = 0; xx < N; ++xx)
+            if (obj.save_directory.empty())
             {
-                double current_lat = start_lat + yy * step_deg_y;
-                double current_lon = start_lon + xx * step_deg_x;
-                coordinat.push_back({current_lat, current_lon});
+                QMessageBox::critical(this, "Ошибка", QString("Путь сохранения для объекта '%1' пуст.").arg(QString::fromStdString(obj.name)));
+                return;
             }
+            // Можно добавить проверку на доступность записи в каталог, но создание каталогов в потоке надежнее.
         }
-        // --- Конец генерации координат ---
 
-        // std::cout << "Генерация сетки: Радиус=" << radius << " км, Шаг=" << step_deg << " град. => Сетка " << N << "x" << N << " = " << coordinat.size() << " координат." << std::endl;
+        // Создать и запустить поток
+        if (captureThread)
+        {                              // Если предыдущий поток существует, но не запущен
+            captureThread->wait(1000); // Дать немного времени на завершение, если он в процессе остановки
+            delete captureThread;
+            captureThread = nullptr;
+        }
 
-        // Создать новый экземпляр потока
-        captureThread = new CaptureThread();
-        // Подключить сигнал finished к deleteLater для очистки объекта потока
+        // Передаем вектор объектов в поток
+        captureThread = new CaptureThread(m_mapObjectList,
+                                          current_capture_interval,
+                                          current_start_time,
+                                          current_end_time,
+                                          this); // parent
         connect(captureThread, &QThread::finished, captureThread, &QObject::deleteLater);
+        connect(captureThread, &QThread::finished, this, [this]()
+                {
+            this->startButton->setEnabled(true);
+            this->stopButton->setEnabled(false);
+            this->addMapObjectButton->setEnabled(true);
+            this->removeMapObjectButton->setEnabled(true);
+            QMessageBox::information(this, "Статус", "Процесс съемки завершен."); });
 
-        // Передать конечный выходной каталог потоку
-        captureThread->setDirectory(screenshot_directory);
-
-        // Запустить поток
         captureThread->start();
-        // QMessageBox::information(this, "Информация", "Съемка начата."); // Может быть назойливым
+        startButton->setEnabled(false); // Disable start button while running
+        stopButton->setEnabled(true);
+        addMapObjectButton->setEnabled(false);
+        removeMapObjectButton->setEnabled(false);
+
+        QMessageBox::information(this, "Статус", "Съемка начата.");
     }
 
     void stopCapture()
     {
         if (captureThread && captureThread->isRunning())
         {
-            std::cout << "Нажата кнопка 'Остановить'. Сигнализируем потоку остановиться." << std::endl;
-            captureThread->stop(); // Сигнализировать потоку остановиться
-            // НЕ вызывать wait() здесь, так как это заблокирует поток GUI
+            std::cout << "Нажата кнопка 'Остановить'. Сигнализируем потоку." << std::endl;
+            captureThread->stop();
+            stopButton->setEnabled(false); // Disable stop button immediately
+            // startButton re-enabled via finished signal
+            QMessageBox::information(this, "Статус", "Запрос на остановку съемки отправлен. Поток завершит текущую операцию и остановится.");
         }
         else
         {
-            QMessageBox::information(this, "Информация", "Захват не запущен.");
+            if (!captureThread)
+            { // if thread was never started or already deleted
+                startButton->setEnabled(true);
+                stopButton->setEnabled(false);
+                addMapObjectButton->setEnabled(true);
+                removeMapObjectButton->setEnabled(true);
+            }
+            QMessageBox::information(this, "Информация", "Съемка не запущена.");
         }
     }
 
-    void browseDirectory()
+    // Слот для выбора каталога сохранения для текущего добавляемого объекта
+    void browseObjectDirectory()
     {
-        QString directory = QFileDialog::getExistingDirectory(this, "Выбор каталога для сохранения снимков", QString::fromStdString(screenshot_directory));
+        QString currentObjectDir = objectSaveDirEdit->text().trimmed();
+        if (currentObjectDir.isEmpty())
+        {
+            currentObjectDir = "./screenshots_output/" + objectNameEdit->text().trimmed(); // Предлагаем путь по имени
+        }
+
+        QString directory = QFileDialog::getExistingDirectory(this, "Выбор каталога для объекта", currentObjectDir);
+
         if (!directory.isEmpty())
         {
-            dirEdit->setText(directory);
+            objectSaveDirEdit->setText(directory);
         }
     }
 
-    void onSnapshotDone(const QString &filename)
+    // Слот для обновления предлагаемого пути сохранения при изменении имени объекта
+    void updateObjectSaveDir(const QString &name)
     {
-        // Этот слот будет подключен, если вам нужны обновления GUI для каждого отдельного снимка.
-        // При объединении этот сигнал менее важен.
-        // std::cout << "Получен сигнал: Снимок сохранен: " << filename.toStdString() << std::endl;
+        // Обновляем предлагаемый путь сохранения на основе нового имени объекта
+        // Это не меняет путь у уже добавленных объектов
+        QString base_dir = "./screenshots_output/"; // Или другой базовый путь по умолчанию
+        QString safe_name = name.trimmed();
+        if (safe_name.isEmpty())
+            safe_name = "Объект";
+        // Убрать недопустимые символы для имени папки (просто пример, можно улучшить)
+        safe_name.replace(" ", "_");
+        safe_name.replace("/", "_");
+        // Добавьте другие символы, если нужно
+
+        objectSaveDirEdit->setText(base_dir + safe_name);
     }
 
 private:
-    QTimeEdit *startTimeEdit;
-    QTimeEdit *endTimeEdit;
-    QLineEdit *intervalEdit;
+    // Элементы GUI для добавления объекта
+    QLineEdit *objectNameEdit;
     QLineEdit *latEdit;
     QLineEdit *lonEdit;
     QLineEdit *radiusEdit;
-    QLineEdit *dirEdit;
-    CaptureThread *captureThread; // Указатель на рабочий поток
-    // coordinat является глобальной переменной
+    QLineEdit *objectSaveDirEdit; // Поле для пути сохранения объекта
+    QPushButton *addMapObjectButton;
+
+    // Список объектов
+    QListWidget *mapObjectsListWidget;
+    QPushButton *removeMapObjectButton;
+    std::vector<MapObject> m_mapObjectList; // Хранилище объектов
+
+    // Общие настройки
+    QTimeEdit *startTimeEdit;
+    QTimeEdit *endTimeEdit;
+    QLineEdit *intervalEdit;
+
+    // Кнопки управления
+    QPushButton *startButton;
+    QPushButton *stopButton;
+
+    CaptureThread *captureThread;
 };
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    std::locale::global(std::locale("C"));
-    // Создать каталог по умолчанию для окончательных скриншотов, если он не существует
+    std::locale::global(std::locale("C")); // Для корректного преобразования чисел в строки (точка как разделитель)
+
+    // Создать базовый каталог для скриншотов по умолчанию, если он не существует
+    std::string base_screenshot_dir = "./screenshots_output";
     std::error_code ec;
-    if (!std::filesystem::exists(screenshot_directory))
+    if (!std::filesystem::exists(base_screenshot_dir))
     {
-        std::filesystem::create_directory(screenshot_directory, ec);
+        std::filesystem::create_directories(base_screenshot_dir, ec);
         if (ec)
         {
-            std::cerr << "Ошибка создания каталога скриншотов по умолчанию '" << screenshot_directory << "': " << ec.message() << std::endl;
-            // Решить, является ли это фатальной ошибкой или пользователь может выбрать другой каталог.
-            // Пока что позволим приложению запуститься, проверка каталога выполняется перед захватом.
+            std::cerr << "Предупреждение: Не удалось создать базовый каталог для скриншотов '" << base_screenshot_dir << "': " << ec.message() << std::endl;
+            // Приложение продолжит работу, но пользователь должен будет выбрать доступный каталог для каждого объекта.
         }
     }
 
-    // Временный каталог управляется потоком (создается и очищается внутри run)
-    // и потенциально деструктором приложения для безопасности.
-
     SnapshotApp window;
-    window.resize(400, 450); // Скорректированный размер окна
+    window.resize(500, 750); // Немного увеличим окно
     window.show();
 
     return app.exec();
