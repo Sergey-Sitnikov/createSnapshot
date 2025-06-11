@@ -332,9 +332,23 @@ public:
             } // Конец цикла по объектам
 
             if (running)
-            { // Ждать следующий интервал, только если не остановлено
-                std::cout << "Все объекты обработаны. Ожидание следующего интервала захвата (" << m_capture_interval_sec << "с)..." << std::endl;
-                sleepAndCheckRunning(m_capture_interval_sec);
+            {
+                // Получить текущий момент времени (высокой точности)
+                auto now = std::chrono::system_clock::now();
+                // Преобразовать в time_t (для совместимости со старыми функциями)
+                std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+                // Преобразовать в локальное время (структура tm)
+                std::tm *local_tm = std::localtime(&now_c);
+
+                if (m_capture_interval_sec % 3600 != 0 || local_tm->tm_min == 0 || local_tm->tm_min == 1)
+                { // Ждать следующий интервал, только если не остановлено
+                    // std::cout << "Все объекты обработаны. Ожидание следующего интервала захвата (" << m_capture_interval_sec << "с)..." << std::endl;
+                    sleepAndCheckRunning(m_capture_interval_sec);
+                }
+                else
+                {
+                    sleepAndCheckRunning(m_capture_interval_sec - local_tm->tm_min * 60);
+                }
             }
         } // Конец while(running)
 
@@ -482,8 +496,8 @@ private:
         // Определяем размер тайла (примерно 0.01 градуса для Яндекса с spn=0.015,0.015 и size=450,450)
         // Bbox-у Яндекса нужны {lon_left,lat_bottom}~{lon_right,lat_top}
         // Используем фиксированный размер тайла, соответствующий шагам сетки
-        const double tile_height_deg = 0.01;//37; // Это наш step_deg_y
-        const double tile_width_deg = 0.01;//93;  // Это наш step_deg_x
+        const double tile_height_deg = 0.01; // 37; // Это наш step_deg_y
+        const double tile_width_deg = 0.01;  // 93;  // Это наш step_deg_x
 
         double lon_right = lon_left + tile_width_deg;
         double lat_top = lat_bottom + tile_height_deg;
@@ -493,7 +507,7 @@ private:
         oss_api_url << "https://static-maps.yandex.ru/1.x/?bbox="
                     << lon_left << "," << lat_bottom << "~" << lon_right << "," << lat_top
                     << "&size=450,450&l=map,trf"; // trf - пробки
-                                     
+
         std::string api_url = oss_api_url.str();
 
         // std::cout << "Запрос URL: " << api_url << std::endl; // Для отладки
@@ -624,9 +638,9 @@ public:
         settingsLayout->addWidget(new QLabel("Время окончания (hh:mm):"));
         settingsLayout->addWidget(endTimeEdit);
 
-        intervalEdit = new QLineEdit("3600");                           // 1 час
-        intervalEdit->setValidator(new QIntValidator(60, 86400, this)); // от 1 мин до 24 часов
-        settingsLayout->addWidget(new QLabel("Интервал съемки (с):"));
+        intervalEdit = new QLineEdit("60");                           // 1 час
+        intervalEdit->setValidator(new QIntValidator(1, 1440, this)); // от 1 мин до 24 часов
+        settingsLayout->addWidget(new QLabel("Интервал съемки (м):"));
         settingsLayout->addWidget(intervalEdit);
 
         settingsGroup->setLayout(settingsLayout);
@@ -757,7 +771,7 @@ private slots:
         bool ok_interval;
         std::string current_start_time = startTimeEdit->time().toString("hh:mm").toStdString();
         std::string current_end_time = endTimeEdit->time().toString("hh:mm").toStdString();
-        int current_capture_interval = intervalEdit->text().toInt(&ok_interval);
+        int current_capture_interval = intervalEdit->text().toInt(&ok_interval) * 60;
 
         if (!ok_interval || current_capture_interval < 60)
         { // Минимальный интервал 60с
