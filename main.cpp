@@ -654,7 +654,7 @@ public:
 
         stopButton = new QPushButton("Остановить съемку");
         connect(stopButton, &QPushButton::clicked, this, &SnapshotApp::stopCapture);
-        controlButtonsLayout->addWidget(stopButton);
+        // controlButtonsLayout->addWidget(stopButton);
         mainLayout->addLayout(controlButtonsLayout);
 
         setLayout(mainLayout);
@@ -846,19 +846,42 @@ private slots:
     }
 
     // Слот для выбора каталога сохранения для текущего добавляемого объекта
+    // void browseObjectDirectory()
+    // {
+    //     QString currentObjectDir = objectSaveDirEdit->text().trimmed();
+    //     if (currentObjectDir.isEmpty())
+    //     {
+    //         currentObjectDir = "./screenshots_output/" + objectNameEdit->text().trimmed(); // Предлагаем путь по имени
+    //     }
+
+    //     QString directory = QFileDialog::getExistingDirectory(this, "Выбор каталога для объекта", currentObjectDir);
+
+    //     if (!directory.isEmpty())
+    //     {
+    //         objectSaveDirEdit->setText(directory);
+    //     }
+    // }
+
     void browseObjectDirectory()
     {
         QString currentObjectDir = objectSaveDirEdit->text().trimmed();
         if (currentObjectDir.isEmpty())
         {
-            currentObjectDir = "./screenshots_output/" + objectNameEdit->text().trimmed(); // Предлагаем путь по имени
+            currentObjectDir = "./screenshots_output/" + objectNameEdit->text().trimmed();
         }
-
         QString directory = QFileDialog::getExistingDirectory(this, "Выбор каталога для объекта", currentObjectDir);
 
         if (!directory.isEmpty())
         {
             objectSaveDirEdit->setText(directory);
+            // Добавить создание директории здесь, если нужно создать ее немедленно после выбора
+            std::error_code ec;
+            std::filesystem::create_directories(directory.toStdString(), ec);
+            if (ec)
+            {
+                QMessageBox::warning(this, "Ошибка создания каталога",
+                                     QString("Не удалось создать каталог: %1\n%2").arg(directory).arg(ec.message().c_str()));
+            }
         }
     }
 
@@ -911,17 +934,17 @@ int main(int argc, char *argv[])
     std::locale::global(std::locale("C")); // Для корректного преобразования чисел в строки (точка как разделитель)
 
     // Создать базовый каталог для скриншотов по умолчанию, если он не существует
-    std::string base_screenshot_dir = "./screenshots_output";
-    std::error_code ec;
-    if (!std::filesystem::exists(base_screenshot_dir))
-    {
-        std::filesystem::create_directories(base_screenshot_dir, ec);
-        if (ec)
-        {
-            std::cerr << "Предупреждение: Не удалось создать базовый каталог для скриншотов '" << base_screenshot_dir << "': " << ec.message() << std::endl;
-            // Приложение продолжит работу, но пользователь должен будет выбрать доступный каталог для каждого объекта.
-        }
-    }
+    // std::string base_screenshot_dir = "./screenshots_output";
+    // std::error_code ec;
+    // if (!std::filesystem::exists(base_screenshot_dir))
+    // {
+    //     std::filesystem::create_directories(base_screenshot_dir, ec);
+    //     if (ec)
+    //     {
+    //         std::cerr << "Предупреждение: Не удалось создать базовый каталог для скриншотов '" << base_screenshot_dir << "': " << ec.message() << std::endl;
+    //         // Приложение продолжит работу, но пользователь должен будет выбрать доступный каталог для каждого объекта.
+    //     }
+    // }
 
     SnapshotApp window;
     window.resize(500, 750); // Немного увеличим окно
